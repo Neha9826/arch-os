@@ -20,7 +20,8 @@ import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Save, Share2, Check, Code, Copy, Eye } from "lucide-react";
+// import { ArrowLeft, Save, Share2, Check, Code, Copy, Eye } from "lucide-react";
+import { ArrowLeft, Save, Share2, Check, Code, Copy, Eye, Bot } from "lucide-react";
 
 const nodeTypes = {
   tech: TechNode,
@@ -46,6 +47,10 @@ function StudioEditor() {
   const [nodes, setNodes, onNodesChange] = useNodesState(isNewProject ? defaultNodes : []);
   const [edges, setEdges, onEdgesChange] = useEdgesState(isNewProject ? defaultEdges : []);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
+
+  const [showAIReviewModal, setShowAIReviewModal] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [promptCopied, setPromptCopied] = useState(false);
 
   const [user, setUser] = useState<User | null>(null);
   const [projectTitle, setProjectTitle] = useState(isNewProject ? "Untitled Architecture" : "Loading Architecture...");
@@ -75,12 +80,13 @@ function StudioEditor() {
       if (!isNewProject && projectId) {
         isLoadingData.current = true; 
         try {
-          const docRef = doc(db, "projects", projectId);
+          const docRef = doc(db, "architectures", projectId);
           const docSnap = await getDoc(docRef);
+          
           if (docSnap.exists()) {
             const data = docSnap.data();
-            setProjectTitle(data.title || "Untitled Architecture");
-            setInputTitle(data.title || "Untitled Architecture");
+            setProjectTitle(data.name || data.title || "Untitled Architecture");
+            setInputTitle(data.name || data.title || "Untitled Architecture");
             if (data.nodes) setNodes(data.nodes);
             if (data.edges) setEdges(data.edges);
 
@@ -117,19 +123,23 @@ function StudioEditor() {
     return () => unsubscribe();
   }, [projectId, isNewProject, setNodes, setEdges]);
 
-  const handleSaveAction = async (titleToSave?: string, andExit: boolean = false) => {
+ const handleSaveAction = async (titleToSave?: string, andExit: boolean = false) => {
     if (!user || isReadOnly) return;
 
     setIsSaving(true);
     try {
       const finalTitle = titleToSave || projectTitle;
 
+      // Sanitize the React Flow state to remove 'undefined' values that crash Firestore
+      const safeNodes = JSON.parse(JSON.stringify(nodes));
+      const safeEdges = JSON.parse(JSON.stringify(edges));
+
       if (isNewProject) {
-        const docRef = await addDoc(collection(db, "projects"), {
-          title: finalTitle,
+        const docRef = await addDoc(collection(db, "architectures"), {
+          name: finalTitle,
           ownerId: user.uid,
-          nodes,
-          edges,
+          nodes: safeNodes,
+          edges: safeEdges,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
@@ -143,12 +153,12 @@ function StudioEditor() {
           router.replace(`/canvas/${docRef.id}`);
         }
       } else {
-        const docRef = doc(db, "projects", projectId);
+        const docRef = doc(db, "architectures", projectId);
         await updateDoc(docRef, {
-          title: finalTitle,
-          nodes,
-          edges,
-          updatedAt: new Date().toISOString(),
+          name: finalTitle,
+          nodes: safeNodes, // Using the sanitized data here
+          edges: safeEdges, // And here
+          updatedAt: serverTimestamp(),
         });
         setProjectTitle(finalTitle);
         setHasUnsavedChanges(false);
@@ -226,10 +236,56 @@ function StudioEditor() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const generateAIReviewPrompt = () => {
+    let architectureText = "System Architecture Nodes:\n";
+    nodes.forEach(n => {
+      architectureText += `- [Node ID: ${n.id}] ${n.data.label}\n`;
+    });
+
+    architectureText += "\nData Flow & Connections:\n";
+    edges.forEach(e => {
+      const sourceNode = nodes.find(n => n.id === e.source)?.data.label || e.source;
+      const targetNode = nodes.find(n => n.id === e.target)?.data.label || e.target;
+      const protocol = e.label ? ` via ${e.label}` : "";
+      architectureText += `- ${sourceNode} connects to ${targetNode}${protocol}\n`;
+    });
+
+    const masterPrompt = `Please review the following cloud architecture design:
+
+      ${architectureText}
+
+      Your goal is to analyze this system for single points of failure, scaling bottlenecks, and security gaps. 
+
+      CRITICAL TONE DIRECTIVES: 
+      Act as a supportive, highly collaborative tech lead reviewing a peer's design. You must explain and point out potential improvements gracefully and constructively. Under no circumstances should you use the word "junior" or any other demeaning, arrogant, or condescending labels to describe the design choices. Maintain a respectful, team-oriented tone throughout your analysis.`;
+
+          setAiPrompt(masterPrompt);
+          setShowAIReviewModal(true);
+    };
+
+    const copyAIPrompt = () => {
+      navigator.clipboard.writeText(aiPrompt);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2000);
+    };
+
   const onConnect = useCallback(
     (params: Connection) => {
       if (isReadOnly) return;
-      setEdges((eds) => addEdge({ ...params, animated: true }, eds));
+      
+      // Prompt the user for the protocol/label immediately upon connection
+      const connectionType = prompt("Enter connection protocol (e.g., REST, GraphQL, gRPC, TCP) or leave blank:");
+      
+      setEdges((eds) => addEdge({ 
+        ...params, 
+        animated: true, 
+        label: connectionType || undefined,
+        labelStyle: { fill: '#cbd5e1', fontWeight: 600, fontSize: 12 },
+        labelBgStyle: { fill: '#1e293b', fillOpacity: 0.8 },
+        labelBgPadding: [8, 4],
+        labelBgBorderRadius: 4,
+        style: { stroke: '#3b82f6', strokeWidth: 2 } // Sleek blue animated line
+      }, eds));
     },
     [setEdges, isReadOnly]
   );
@@ -289,6 +345,13 @@ function StudioEditor() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button 
+            onClick={generateAIReviewPrompt}
+            className="text-purple-400 hover:text-purple-300 border border-purple-900/50 hover:bg-purple-950/30 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            <Bot size={16} /> AI Review
+          </button>
+
           <button 
             onClick={generateIaC}
             className="text-emerald-400 hover:text-emerald-300 border border-emerald-900/50 hover:bg-emerald-950/30 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
@@ -463,6 +526,50 @@ function StudioEditor() {
                 className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
               >
                 Save to Cloud
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showAIReviewModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-3xl w-full shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
+                <Bot className="text-purple-400" size={20} /> 
+                AI Architecture Review
+              </h3>
+              <button 
+                onClick={() => setShowAIReviewModal(false)}
+                className="text-slate-500 hover:text-slate-300 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <p className="text-sm text-slate-400 mb-4">
+              Copy this strictly engineered prompt into ChatGPT, Claude, or your copilot. It contains your exact canvas structure and instructions forcing the AI to provide a supportive, constructive review without any condescending tone.
+            </p>
+
+            <div className="relative flex-1 min-h-[300px] overflow-hidden rounded-xl border border-slate-800 bg-[#0d1117]">
+              <button 
+                onClick={copyAIPrompt}
+                className="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-lg transition-colors z-10 flex items-center gap-2 text-xs font-medium"
+              >
+                {promptCopied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                {promptCopied ? "Copied" : "Copy Prompt"}
+              </button>
+              <pre className="p-6 text-sm text-slate-300 font-mono overflow-auto h-full whitespace-pre-wrap">
+                <code>{aiPrompt}</code>
+              </pre>
+            </div>
+
+            <div className="flex justify-end mt-6">
+              <button 
+                onClick={() => setShowAIReviewModal(false)}
+                className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-colors"
+              >
+                Close
               </button>
             </div>
           </div>
