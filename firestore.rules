@@ -1,0 +1,71 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isWorkspaceOwner(workspaceId) {
+      return exists(/databases/$(database)/documents/workspaces/$(workspaceId))
+        && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
+    }
+
+    function hasWorkspace(data) {
+      return data.keys().hasAll(['workspaceId']);
+    }
+
+    match /workspaces/{workspaceId} {
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid;
+
+      // Allow a user to probe their deterministic personal-workspace ID when it
+      // does not exist yet; a missing document discloses no workspace data.
+      allow get: if isSignedIn()
+        && (
+          !exists(/databases/$(database)/documents/workspaces/$(workspaceId))
+          || resource.data.ownerId == request.auth.uid
+        );
+
+      allow list, delete: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid;
+
+      allow update: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId;
+    }
+
+    match /architectures/{architectureId} {
+      // Existing owner-only documents predate the workspace model. They remain
+      // available to their owner and may be associated with a workspace on save.
+      allow get, list: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && hasWorkspace(request.resource.data)
+        && isWorkspaceOwner(request.resource.data.workspaceId);
+
+      allow update: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId
+        && (
+          (
+            hasWorkspace(resource.data)
+            && request.resource.data.workspaceId == resource.data.workspaceId
+            && isWorkspaceOwner(resource.data.workspaceId)
+          )
+          || (
+            !hasWorkspace(resource.data)
+            && (
+              !hasWorkspace(request.resource.data)
+              || isWorkspaceOwner(request.resource.data.workspaceId)
+            )
+          )
+        );
+
+      allow delete: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid;
+    }
+  }
+}

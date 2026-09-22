@@ -16,12 +16,16 @@ import "reactflow/dist/style.css";
 import Sidebar from "@/components/Sidebar";
 import TechNode from "@/components/TechNode";
 
-import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { useAuth } from "@/context/AuthContext";
+import {
+  createArchitecture,
+  getArchitecture,
+  updateArchitecture,
+} from "@/lib/repositories/architectures";
+import { getFirestoreErrorCode } from "@/lib/repositories/errors";
+import { ensurePersonalWorkspace } from "@/lib/repositories/workspaces";
 import { useParams, useRouter } from "next/navigation";
-// import { ArrowLeft, Save, Share2, Check, Code, Copy, Eye } from "lucide-react";
-import { ArrowLeft, Save, Share2, Check, Code, Copy, Eye, Bot } from "lucide-react";
+import { ArrowLeft, Save, Share2, Check, Code, Copy, Bot } from "lucide-react";
 
 const nodeTypes = {
   tech: TechNode,
@@ -37,7 +41,7 @@ function StudioEditor() {
   const isNewProject = projectId === "new";
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  
+
   const defaultNodes = [
     { id: "1", type: "tech", position: { x: 250, y: 150 }, data: { label: "💻 Client / UI" } },
     { id: "2", type: "tech", position: { x: 250, y: 300 }, data: { label: "⚙️ API Service" } }
@@ -52,12 +56,12 @@ function StudioEditor() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
 
-  const [user, setUser] = useState<User | null>(null);
+  const { user, loading: authLoading } = useAuth();
   const [projectTitle, setProjectTitle] = useState(isNewProject ? "Untitled Architecture" : "Loading Architecture...");
   const [isSaving, setIsSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
-  
+
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -65,120 +69,153 @@ function StudioEditor() {
   const [generatedCode, setGeneratedCode] = useState("");
   const [inputTitle, setInputTitle] = useState("My Architecture");
 
-  const [isReadOnly, setIsReadOnly] = useState(false);
+  const [workspaceId, setWorkspaceId] = useState<string | undefined>();
+  const [accessState, setAccessState] = useState<
+    "loading" | "ready" | "unauthorized" | "not-found" | "error"
+  >("loading");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const isLoadingData = useRef(true);
 
   useEffect(() => {
-    if (isLoadingData.current || isReadOnly) return;
+    if (isLoadingData.current) return;
     setHasUnsavedChanges(true);
-  }, [nodes, edges, isReadOnly]);
+  }, [nodes, edges]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      
-      if (!isNewProject && projectId) {
-        isLoadingData.current = true; 
-        try {
-          const docRef = doc(db, "architectures", projectId);
-          const docSnap = await getDoc(docRef);
-          
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            setProjectTitle(data.name || data.title || "Untitled Architecture");
-            setInputTitle(data.name || data.title || "Untitled Architecture");
-            if (data.nodes) setNodes(data.nodes);
-            if (data.edges) setEdges(data.edges);
+    if (authLoading) return;
 
-            if (data.nodes && data.nodes.length > 0) {
-              const maxId = Math.max(...data.nodes.map((n: any) => parseInt(n.id) || 0));
-              id = maxId + 1;
-            }
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
 
-            if (data.ownerId !== currentUser?.uid) {
-              setIsReadOnly(true);
-            } else {
-              setIsReadOnly(false);
-            }
+    let cancelled = false;
 
-            setHasUnsavedChanges(false);
-          } else {
-            setProjectTitle("Project not found");
-            setIsReadOnly(true);
-          }
-        } catch (error) {
-          console.error("Error loading project:", error);
-          setProjectTitle("Error loading project");
-          setIsReadOnly(true);
-        } finally {
-          setTimeout(() => {
-            isLoadingData.current = false;
-          }, 300);
-        }
-      } else {
-        isLoadingData.current = false; 
-        setIsReadOnly(false);
+    const loadArchitecture = async () => {
+      if (isNewProject) {
+        isLoadingData.current = false;
+        setAccessState("ready");
+        return;
       }
-    });
-    return () => unsubscribe();
-  }, [projectId, isNewProject, setNodes, setEdges]);
+
+      isLoadingData.current = true;
+      setAccessState("loading");
+
+      try {
+        const architecture = await getArchitecture(projectId);
+
+        if (cancelled) return;
+
+        if (!architecture) {
+          setAccessState("not-found");
+          return;
+        }
+
+        // Firestore rules are the authorization boundary. This is only a
+        // defensive consistency check for malformed or migrated data.
+        if (architecture.ownerId !== user.uid) {
+          setAccessState("unauthorized");
+          return;
+        }
+
+        setProjectTitle(architecture.name);
+        setInputTitle(architecture.name);
+        setWorkspaceId(architecture.workspaceId);
+        setNodes(architecture.nodes);
+        setEdges(architecture.edges);
+
+        if (architecture.nodes.length > 0) {
+          const maxId = Math.max(
+            ...architecture.nodes.map((node) => parseInt(node.id) || 0),
+          );
+          id = maxId + 1;
+        }
+
+        setHasUnsavedChanges(false);
+        setAccessState("ready");
+      } catch (error) {
+        if (cancelled) return;
+
+        console.error("Error loading project:", error);
+        setAccessState(
+          getFirestoreErrorCode(error) === "permission-denied"
+            ? "unauthorized"
+            : "error",
+        );
+      } finally {
+        setTimeout(() => {
+          if (!cancelled) isLoadingData.current = false;
+        }, 300);
+      }
+    };
+
+    void loadArchitecture();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, isNewProject, projectId, router, setEdges, setNodes, user]);
 
  const handleSaveAction = async (titleToSave?: string, andExit: boolean = false) => {
-    if (!user || isReadOnly) return;
+     if (!user || accessState !== "ready") return;
 
-    setIsSaving(true);
-    try {
-      const finalTitle = titleToSave || projectTitle;
+     setIsSaving(true);
+     setSaveError(null);
+     setSaveNotice(null);
+     try {
+       const finalTitle = titleToSave || projectTitle;
+       const workspace = await ensurePersonalWorkspace(user.uid);
+       const resolvedWorkspaceId = workspaceId || workspace.id;
 
-      // Sanitize the React Flow state to remove 'undefined' values that crash Firestore
-      const safeNodes = JSON.parse(JSON.stringify(nodes));
-      const safeEdges = JSON.parse(JSON.stringify(edges));
+       if (isNewProject) {
+         const architectureId = await createArchitecture({
+           name: finalTitle,
+           ownerId: user.uid,
+           workspaceId: resolvedWorkspaceId,
+           nodes,
+           edges,
+         });
+         setHasUnsavedChanges(false);
+         setShowSaveModal(false);
 
-      if (isNewProject) {
-        const docRef = await addDoc(collection(db, "architectures"), {
-          name: finalTitle,
-          ownerId: user.uid,
-          nodes: safeNodes,
-          edges: safeEdges,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        setHasUnsavedChanges(false);
-        setShowSaveModal(false);
-        setIsSaving(false);
+         if (andExit) {
+           router.push("/");
+         } else {
+           router.replace(`/canvas/${architectureId}`);
+         }
+       } else {
+         await updateArchitecture({
+           id: projectId,
+           name: finalTitle,
+           workspaceId: resolvedWorkspaceId,
+           nodes,
+           edges,
+         });
+         setProjectTitle(finalTitle);
+         setWorkspaceId(resolvedWorkspaceId);
+         setHasUnsavedChanges(false);
 
-        if (andExit) {
-          router.push("/");
-        } else {
-          router.replace(`/canvas/${docRef.id}`);
-        }
-      } else {
-        const docRef = doc(db, "architectures", projectId);
-        await updateDoc(docRef, {
-          name: finalTitle,
-          nodes: safeNodes, // Using the sanitized data here
-          edges: safeEdges, // And here
-          updatedAt: serverTimestamp(),
-        });
-        setProjectTitle(finalTitle);
-        setHasUnsavedChanges(false);
-        setIsSaving(false);
-
-        if (andExit) {
-          router.push("/");
-        } else {
-          alert("Architecture saved successfully!");
-        }
-      }
-    } catch (error) {
-      console.error("Error saving:", error);
-      setIsSaving(false);
-      alert("Failed to save architecture.");
-    }
-  };
+         if (andExit) {
+           router.push("/");
+         } else {
+           setSaveNotice("Architecture saved.");
+         }
+       }
+     } catch (error) {
+       console.error("Error saving:", error);
+       if (getFirestoreErrorCode(error) === "permission-denied") {
+         setAccessState("unauthorized");
+       } else {
+         setSaveError("The architecture could not be saved. Please try again.");
+       }
+     } finally {
+       setIsSaving(false);
+     }
+   };
 
   const handleBackClick = () => {
-    if (hasUnsavedChanges && !isReadOnly) {
+    if (hasUnsavedChanges) {
       setShowExitModal(true);
     } else {
       router.push("/");
@@ -254,9 +291,9 @@ function StudioEditor() {
 
       ${architectureText}
 
-      Your goal is to analyze this system for single points of failure, scaling bottlenecks, and security gaps. 
+      Your goal is to analyze this system for single points of failure, scaling bottlenecks, and security gaps.
 
-      CRITICAL TONE DIRECTIVES: 
+      CRITICAL TONE DIRECTIVES:
       Act as a supportive, highly collaborative tech lead reviewing a peer's design. You must explain and point out potential improvements gracefully and constructively. Under no circumstances should you use the word "junior" or any other demeaning, arrogant, or condescending labels to describe the design choices. Maintain a respectful, team-oriented tone throughout your analysis.`;
 
           setAiPrompt(masterPrompt);
@@ -271,14 +308,12 @@ function StudioEditor() {
 
   const onConnect = useCallback(
     (params: Connection) => {
-      if (isReadOnly) return;
-      
       // Prompt the user for the protocol/label immediately upon connection
       const connectionType = prompt("Enter connection protocol (e.g., REST, GraphQL, gRPC, TCP) or leave blank:");
-      
-      setEdges((eds) => addEdge({ 
-        ...params, 
-        animated: true, 
+
+      setEdges((eds) => addEdge({
+        ...params,
+        animated: true,
         label: connectionType || undefined,
         labelStyle: { fill: '#cbd5e1', fontWeight: 600, fontSize: 12 },
         labelBgStyle: { fill: '#1e293b', fillOpacity: 0.8 },
@@ -287,7 +322,7 @@ function StudioEditor() {
         style: { stroke: '#3b82f6', strokeWidth: 2 } // Sleek blue animated line
       }, eds));
     },
-    [setEdges, isReadOnly]
+    [setEdges]
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -298,8 +333,6 @@ function StudioEditor() {
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
-      if (isReadOnly) return;
-      
       const type = event.dataTransfer.getData("application/reactflow/type");
       const label = event.dataTransfer.getData("application/reactflow/label");
 
@@ -319,14 +352,50 @@ function StudioEditor() {
 
       setNodes((nds) => nds.concat(newNode));
     },
-    [reactFlowInstance, setNodes, isReadOnly]
+    [reactFlowInstance, setNodes]
   );
+
+  if (authLoading || accessState === "loading") {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-slate-400 gap-3">
+        <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        Loading architecture...
+      </div>
+    );
+  }
+
+  if (!user) return null;
+
+  if (accessState !== "ready") {
+    const isUnauthorized = accessState === "unauthorized";
+
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-950 p-6 text-slate-100">
+        <div className="max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center shadow-xl">
+          <h1 className="text-xl font-semibold text-white">
+            {isUnauthorized ? "Architecture unavailable" : "Architecture not found"}
+          </h1>
+          <p className="mt-2 text-sm text-slate-400">
+            {isUnauthorized
+              ? "You do not have permission to access this architecture."
+              : "This architecture could not be loaded. It may have been deleted."}
+          </p>
+          <button
+            onClick={() => router.push("/")}
+            className="mt-6 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+          >
+            Return to workspace
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-screen h-screen flex flex-col font-sans bg-slate-950 overflow-hidden">
       <header className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-6 z-10 shrink-0">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={handleBackClick}
             className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-2 text-sm font-medium"
           >
@@ -335,24 +404,19 @@ function StudioEditor() {
           <div className="h-4 w-[1px] bg-slate-800" />
           <h1 className="text-white font-semibold text-lg tracking-wide flex items-center gap-2">
             {projectTitle}
-            {hasUnsavedChanges && !isReadOnly && <span className="w-2 h-2 rounded-full bg-amber-500" title="Unsaved changes" />}
-            {isReadOnly && (
-              <span className="flex items-center gap-1 bg-slate-800 border border-slate-700 text-slate-300 text-xs px-2.5 py-1 rounded-md ml-2 font-medium">
-                <Eye size={12} /> View Only
-              </span>
-            )}
+            {hasUnsavedChanges && <span className="w-2 h-2 rounded-full bg-amber-500" title="Unsaved changes" />}
           </h1>
         </div>
 
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={generateAIReviewPrompt}
             className="text-purple-400 hover:text-purple-300 border border-purple-900/50 hover:bg-purple-950/30 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
           >
             <Bot size={16} /> AI Review
           </button>
 
-          <button 
+          <button
             onClick={generateIaC}
             className="text-emerald-400 hover:text-emerald-300 border border-emerald-900/50 hover:bg-emerald-950/30 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
           >
@@ -361,32 +425,34 @@ function StudioEditor() {
 
           <div className="h-4 w-[1px] bg-slate-800 mx-1" />
 
-          {!isReadOnly && (
-            <>
-              <button 
-                onClick={copyShareLink}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
-              >
-                {copied ? <Check size={16} className="text-green-400" /> : <Share2 size={16} />}
-                {copied ? "Copied!" : "Share"}
-              </button>
+          <button
+            onClick={copyShareLink}
+            className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            {copied ? <Check size={16} className="text-green-400" /> : <Share2 size={16} />}
+            {copied ? "Copied!" : "Share"}
+          </button>
 
-              <button 
-                onClick={() => isNewProject ? setShowSaveModal(true) : handleSaveAction()}
-                disabled={isSaving}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 shadow-lg shadow-blue-600/20 disabled:opacity-50"
-              >
-                <Save size={16} />
-                {isSaving ? "Saving..." : "Save Canvas"}
-              </button>
-            </>
-          )}
+          <button
+            onClick={() => isNewProject ? setShowSaveModal(true) : handleSaveAction()}
+            disabled={isSaving}
+            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 shadow-lg shadow-blue-600/20 disabled:opacity-50"
+          >
+            <Save size={16} />
+            {isSaving ? "Saving..." : "Save Canvas"}
+          </button>
         </div>
       </header>
 
+      {(saveError || saveNotice) && (
+        <div className={`px-6 py-2 text-sm ${saveError ? "bg-red-950/50 text-red-200" : "bg-emerald-950/50 text-emerald-200"}`}>
+          {saveError || saveNotice}
+        </div>
+      )}
+
       <div className="flex-1 flex w-full h-full overflow-hidden">
-        {!isReadOnly && <Sidebar />}
-        
+        <Sidebar />
+
         <div className="flex-1 h-full relative" ref={reactFlowWrapper}>
           <ReactFlow
             nodes={nodes}
@@ -400,15 +466,14 @@ function StudioEditor() {
             onDragOver={onDragOver}
             fitView
             className="bg-slate-950"
-            nodesDraggable={!isReadOnly}
-            nodesConnectable={!isReadOnly}
-            elementsSelectable={!isReadOnly}
-            deleteKeyCode={isReadOnly ? null : 'Backspace'}
+            nodesDraggable
+            nodesConnectable
+            elementsSelectable
+            deleteKeyCode="Backspace"
           >
             <Background color="#334155" gap={16} />
             <Controls className="bg-slate-800 border-slate-700 fill-white" />
-            
-            {!isReadOnly && (
+
               <Panel position="top-right" className="bg-slate-800/80 backdrop-blur-md border border-slate-700 text-slate-300 p-4 rounded-lg shadow-xl text-sm max-w-xs pointer-events-none">
                 <h3 className="text-white font-semibold mb-2 flex items-center gap-2">
                   <span>💡</span> Studio Controls
@@ -418,7 +483,6 @@ function StudioEditor() {
                   <li><strong className="text-orange-400">Delete:</strong> Click a node or line and press <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-600 text-xs">Backspace</kbd></li>
                 </ul>
               </Panel>
-            )}
           </ReactFlow>
         </div>
       </div>
@@ -428,23 +492,23 @@ function StudioEditor() {
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-3xl w-full shadow-2xl flex flex-col max-h-[85vh]">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
-                <Code className="text-emerald-400" size={20} /> 
+                <Code className="text-emerald-400" size={20} />
                 Generated docker-compose.yml
               </h3>
-              <button 
+              <button
                 onClick={() => setShowExportModal(false)}
                 className="text-slate-500 hover:text-slate-300 transition-colors"
               >
                 ✕
               </button>
             </div>
-            
+
             <p className="text-sm text-slate-400 mb-4">
-              We parsed your visual architecture and generated the foundational infrastructure code. 
+              We parsed your visual architecture and generated the foundational infrastructure code.
             </p>
 
             <div className="relative flex-1 min-h-[300px] overflow-hidden rounded-xl border border-slate-800 bg-[#0d1117]">
-              <button 
+              <button
                 onClick={copyGeneratedCode}
                 className="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-lg transition-colors z-10 flex items-center gap-2 text-xs font-medium"
               >
@@ -457,7 +521,7 @@ function StudioEditor() {
             </div>
 
             <div className="flex justify-end mt-6">
-              <button 
+              <button
                 onClick={() => setShowExportModal(false)}
                 className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-colors"
               >
@@ -474,7 +538,7 @@ function StudioEditor() {
             <h3 className="text-lg font-semibold text-slate-100 mb-2">Unsaved Changes</h3>
             <p className="text-sm text-slate-400 mb-6">You have unsaved changes in your architecture. Do you want to save them before leaving, or discard your changes?</p>
             <div className="flex justify-end gap-3">
-              <button 
+              <button
                 onClick={() => {
                   setHasUnsavedChanges(false);
                   setShowExitModal(false);
@@ -484,11 +548,11 @@ function StudioEditor() {
               >
                 Discard Changes
               </button>
-              <button 
+              <button
                 onClick={() => {
                   setShowExitModal(false);
                   if (isNewProject) {
-                    setShowSaveModal(true); 
+                    setShowSaveModal(true);
                   } else {
                     handleSaveAction(undefined, true);
                   }
@@ -506,22 +570,22 @@ function StudioEditor() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <h3 className="text-lg font-semibold text-slate-100 mb-4">Name Your Architecture</h3>
-            <input 
-              type="text" 
-              value={inputTitle} 
+            <input
+              type="text"
+              value={inputTitle}
               onChange={(e) => setInputTitle(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500 mb-6"
               placeholder="e.g. E-Commerce Microservices"
               autoFocus
             />
             <div className="flex justify-end gap-3">
-              <button 
+              <button
                 onClick={() => setShowSaveModal(false)}
                 className="px-4 py-2 rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-800 transition-colors"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={() => handleSaveAction(inputTitle, showExitModal)}
                 className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
               >
@@ -536,23 +600,23 @@ function StudioEditor() {
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-3xl w-full shadow-2xl flex flex-col max-h-[85vh]">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
-                <Bot className="text-purple-400" size={20} /> 
+                <Bot className="text-purple-400" size={20} />
                 AI Architecture Review
               </h3>
-              <button 
+              <button
                 onClick={() => setShowAIReviewModal(false)}
                 className="text-slate-500 hover:text-slate-300 transition-colors"
               >
                 ✕
               </button>
             </div>
-            
+
             <p className="text-sm text-slate-400 mb-4">
               Copy this strictly engineered prompt into ChatGPT, Claude, or your copilot. It contains your exact canvas structure and instructions forcing the AI to provide a supportive, constructive review without any condescending tone.
             </p>
 
             <div className="relative flex-1 min-h-[300px] overflow-hidden rounded-xl border border-slate-800 bg-[#0d1117]">
-              <button 
+              <button
                 onClick={copyAIPrompt}
                 className="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-lg transition-colors z-10 flex items-center gap-2 text-xs font-medium"
               >
@@ -565,7 +629,7 @@ function StudioEditor() {
             </div>
 
             <div className="flex justify-end mt-6">
-              <button 
+              <button
                 onClick={() => setShowAIReviewModal(false)}
                 className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-colors"
               >

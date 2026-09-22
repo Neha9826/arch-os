@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Database, Server, Globe, Box, Layers, Trash2 } from 'lucide-react';
+import { Database, Globe, Box, Layers, Trash2 } from 'lucide-react';
 
 const ICON_OPTIONS = [
   { id: 'cloud', emoji: '☁️', label: 'Cloud' },
@@ -17,9 +17,18 @@ export default function Sidebar() {
   const [savedNodes, setSavedNodes] = useState<{id: string, name: string, emoji: string}[]>([]);
 
   useEffect(() => {
-    const stored = localStorage.getItem('arch-os-custom-nodes');
-    if (stored) setSavedNodes(JSON.parse(stored));
-  }, []);
+  const stored = localStorage.getItem('arch-os-custom-nodes');
+
+  if (!stored) return;
+
+  const parsed = JSON.parse(stored) as {
+    id: string;
+    name: string;
+    emoji: string;
+  }[];
+
+  setTimeout(() => setSavedNodes(parsed), 0);
+}, []);
 
   const saveCustomNode = () => {
     if (!customName.trim()) return;

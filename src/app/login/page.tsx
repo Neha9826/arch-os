@@ -1,18 +1,15 @@
 'use client';
 
-import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithPopup } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-// import { app } from '../../lib/firebase';
-import { app } from '@/lib/firebase';
+import { auth, googleProvider } from '@/lib/firebase';
 
 export default function Login() {
   const router = useRouter();
 
   const handleGoogleSignIn = async () => {
     try {
-      const auth = getAuth(app);
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      await signInWithPopup(auth, googleProvider);
       router.push('/'); // Redirect to dashboard after login
     } catch (error) {
       console.error('Authentication failed:', error);

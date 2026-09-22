@@ -3,15 +3,20 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { db, auth } from '@/lib/firebase';
+import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
-import { collection, query, where, getDocs, deleteDoc, updateDoc, doc } from 'firebase/firestore';
+import {
+  deleteArchitecture,
+  listArchitecturesForOwner,
+  renameArchitecture,
+} from '@/lib/repositories/architectures';
+import { getFirestoreErrorCode } from '@/lib/repositories/errors';
+import { ensurePersonalWorkspace } from '@/lib/repositories/workspaces';
 import { 
   Trash2, 
   Edit2, 
   Plus, 
   Search, 
-  LayoutDashboard, 
   FolderKanban, 
   BookTemplate, 
   Settings, 
@@ -24,7 +29,7 @@ import {
 type Project = {
   id: string;
   name: string;
-  updatedAt?: any;
+  updatedAt?: unknown;
 };
 
 export default function Dashboard() {
@@ -32,6 +37,7 @@ export default function Dashboard() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [fetching, setFetching] = useState(true);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('projects');
 
@@ -45,16 +51,17 @@ export default function Dashboard() {
     const fetchProjects = async () => {
       if (!user) return;
       try {
-        const q = query(collection(db, 'architectures'), where('ownerId', '==', user.uid));
-        const querySnapshot = await getDocs(q);
-        const docs = querySnapshot.docs.map(doc => ({ 
-          id: doc.id, 
-          name: doc.data().name || 'Untitled Architecture',
-          updatedAt: doc.data().updatedAt
-        }));
-        setProjects(docs);
+        setWorkspaceError(null);
+        await ensurePersonalWorkspace(user.uid);
+        const architectures = await listArchitecturesForOwner(user.uid);
+        setProjects(architectures);
       } catch (error) {
         console.error('Error fetching projects:', error);
+        setWorkspaceError(
+          getFirestoreErrorCode(error) === 'permission-denied'
+            ? 'You do not have permission to access this workspace.'
+            : 'Your workspace could not be loaded. Please try again.',
+        );
       } finally {
         setFetching(false);
       }
@@ -71,10 +78,15 @@ export default function Dashboard() {
     if (!confirm('Are you sure you want to delete this architecture?')) return;
     
     try {
-      await deleteDoc(doc(db, 'architectures', id));
-      setProjects(projects.filter(p => p.id !== id));
+      await deleteArchitecture(id);
+      setProjects((currentProjects) => currentProjects.filter(p => p.id !== id));
     } catch (error) {
       console.error('Error deleting project:', error);
+      setWorkspaceError(
+        getFirestoreErrorCode(error) === 'permission-denied'
+          ? 'You do not have permission to delete this architecture.'
+          : 'The architecture could not be deleted. Please try again.',
+      );
     }
   };
 
@@ -84,10 +96,17 @@ export default function Dashboard() {
     if (!newName || newName === currentName) return;
     
     try {
-      await updateDoc(doc(db, 'architectures', id), { name: newName });
-      setProjects(projects.map(p => p.id === id ? { ...p, name: newName } : p));
+      await renameArchitecture(id, newName);
+      setProjects((currentProjects) => currentProjects.map((project) =>
+        project.id === id ? { ...project, name: newName } : project,
+      ));
     } catch (error) {
       console.error('Error renaming project:', error);
+      setWorkspaceError(
+        getFirestoreErrorCode(error) === 'permission-denied'
+          ? 'You do not have permission to rename this architecture.'
+          : 'The architecture could not be renamed. Please try again.',
+      );
     }
   };
 
@@ -223,6 +242,11 @@ export default function Dashboard() {
             {activeTab !== 'projects' ? (
               <div className="text-center py-32 bg-slate-900/40 rounded-2xl border border-slate-800/80">
                 <p className="text-slate-400 font-medium">Coming soon in the next release pipeline.</p>
+              </div>
+            ) : workspaceError ? (
+              <div className="text-center py-20 bg-red-950/20 rounded-2xl border border-red-900/60">
+                <h3 className="text-red-200 font-semibold mb-2">Workspace unavailable</h3>
+                <p className="text-sm text-red-300/80">{workspaceError}</p>
               </div>
             ) : filteredProjects.length === 0 ? (
               <div className="text-center py-28 bg-slate-900/30 rounded-2xl border border-slate-800/80 border-dashed">
