@@ -225,3 +225,22 @@ export function isValidArchitectureIR(
 ): architecture is ArchitectureIR {
   return validateArchitectureIR(architecture).valid;
 }
+
+/**
+ * Enforces the Architecture IR contract at write boundaries.
+ * Callers receive a useful error before invalid data can be persisted.
+ */
+export function assertValidArchitectureIR(
+  architecture: unknown,
+): asserts architecture is ArchitectureIR {
+  const result = validateArchitectureIR(architecture);
+
+  if (!result.valid) {
+    const details = result.issues
+      .map((issue) => `${issue.path || "architecture"}: ${issue.message}`)
+      .join("; ");
+
+    throw new Error(`Invalid Architecture IR. ${details}`);
+  }
+}
+
