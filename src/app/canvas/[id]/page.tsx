@@ -21,6 +21,7 @@ import {
   architectureIRToReactFlow,
   reactFlowToArchitectureIR,
 } from "@/domain/architecture/reactFlowAdapter";
+import { lintArchitecture, type ArchitectureLintResult } from "@/domain/architecture/lint";
 
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -39,6 +40,9 @@ import {
   Code,
   Copy,
   Bot,
+  ShieldCheck,
+  AlertTriangle,
+  Info,
 } from "lucide-react";
 
 const nodeTypes = {
