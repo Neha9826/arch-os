@@ -54,9 +54,6 @@ export function lintArchitecture(
   const seenRelations = new Set<string>();
 
   for (const relation of relations) {
-    outgoing.set(relation.source, (outgoing.get(relation.source) ?? 0) + 1);
-    incoming.set(relation.target, (incoming.get(relation.target) ?? 0) + 1);
-
     if (relation.source === relation.target) {
       const component = componentById.get(relation.source);
       findings.push({
@@ -68,6 +65,9 @@ export function lintArchitecture(
         componentId: relation.source,
         relationId: relation.id,
       });
+    } else {
+      outgoing.set(relation.source, (outgoing.get(relation.source) ?? 0) + 1);
+      incoming.set(relation.target, (incoming.get(relation.target) ?? 0) + 1);
     }
 
     const relationKey = JSON.stringify([
