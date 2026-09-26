@@ -187,18 +187,17 @@ function StudioEditor() {
          * IR and then back to React Flow while preserving the existing
          * canvas positions and visual metadata.
          */
+        const canvasLayout = architecture.canvasLayout ?? {
+          nodes: architecture.nodes,
+          edges: architecture.edges,
+        };
+
         const architectureIR = architecture.architectureIR ??
-          reactFlowToArchitectureIR({
-            nodes: architecture.nodes,
-            edges: architecture.edges,
-          });
+          reactFlowToArchitectureIR(canvasLayout);
 
         const reactFlowState = architectureIRToReactFlow(
           architectureIR,
-          {
-            nodes: architecture.nodes,
-            edges: architecture.edges,
-          },
+          canvasLayout,
         );
 
         setNodes(reactFlowState.nodes);
@@ -287,6 +286,7 @@ function StudioEditor() {
           workspaceId: resolvedWorkspaceId,
           nodes: persistenceState.nodes,
           edges: persistenceState.edges,
+          canvasLayout: persistenceState,
           architectureIR,
         });
 
@@ -305,6 +305,7 @@ function StudioEditor() {
           workspaceId: resolvedWorkspaceId,
           nodes: persistenceState.nodes,
           edges: persistenceState.edges,
+          canvasLayout: persistenceState,
           architectureIR,
         });
 
