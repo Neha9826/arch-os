@@ -31,6 +31,11 @@ import {
 } from "@/lib/repositories/architectures";
 import { getFirestoreErrorCode } from "@/lib/repositories/errors";
 import { ensurePersonalWorkspace } from "@/lib/repositories/workspaces";
+import {
+  createArchitectureSnapshot,
+  listArchitectureSnapshots,
+  type ArchitectureSnapshot,
+} from "@/lib/repositories/architectureSnapshots";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -43,6 +48,8 @@ import {
   ShieldCheck,
   AlertTriangle,
   Info,
+  History,
+  Camera,
 } from "lucide-react";
 
 const nodeTypes = {
@@ -99,6 +106,13 @@ function StudioEditor() {
 
   const [showAIReviewModal, setShowAIReviewModal] = useState(false);
   const [showLintModal, setShowLintModal] = useState(false);
+  const [showSnapshotsModal, setShowSnapshotsModal] = useState(false);
+  const [snapshots, setSnapshots] = useState<ArchitectureSnapshot[]>([]);
+  const [snapshotName, setSnapshotName] = useState("");
+  const [snapshotMessage, setSnapshotMessage] = useState("");
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
+  const [snapshotSaving, setSnapshotSaving] = useState(false);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [lintResult, setLintResult] = useState<ArchitectureLintResult | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
@@ -431,6 +445,89 @@ function StudioEditor() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const openSnapshots = async () => {
+    if (isNewProject) {
+      setSaveError("Save this architecture before creating a snapshot.");
+      return;
+    }
+
+    setShowSnapshotsModal(true);
+    setSnapshotsLoading(true);
+    setSnapshotError(null);
+
+    try {
+      const items = await listArchitectureSnapshots(projectId);
+      setSnapshots(items);
+    } catch (error) {
+      console.error("Error loading snapshots:", error);
+      setSnapshotError("Could not load snapshots. Check your connection and try again.");
+    } finally {
+      setSnapshotsLoading(false);
+    }
+  };
+
+  const handleCreateSnapshot = async () => {
+    if (!user || isNewProject || snapshotSaving) return;
+
+    const name = snapshotName.trim();
+    if (!name) {
+      setSnapshotError("Enter a name for this snapshot.");
+      return;
+    }
+
+    setSnapshotSaving(true);
+    setSnapshotError(null);
+
+    try {
+      const workspace = await ensurePersonalWorkspace(user.uid);
+      const resolvedWorkspaceId = workspaceId || workspace.id;
+      const architectureIR = reactFlowToArchitectureIR({ nodes, edges });
+      const canvasLayout = architectureIRToReactFlow(architectureIR, { nodes, edges });
+
+      // Persist the current editor state first, so the snapshot matches the canvas.
+      await updateArchitecture({
+        id: projectId,
+        name: projectTitle,
+        workspaceId: resolvedWorkspaceId,
+        nodes: canvasLayout.nodes,
+        edges: canvasLayout.edges,
+        canvasLayout,
+        architectureIR,
+      });
+
+      const snapshotId = await createArchitectureSnapshot({
+        architectureId: projectId,
+        workspaceId: resolvedWorkspaceId,
+        ownerId: user.uid,
+        createdBy: user.uid,
+        name,
+        message: snapshotMessage,
+        architectureIR,
+        canvasLayout,
+      });
+
+      setWorkspaceId(resolvedWorkspaceId);
+      setHasUnsavedChanges(false);
+      setSaveNotice("Architecture snapshot created.");
+      setSnapshotName("");
+      setSnapshotMessage("");
+      const items = await listArchitectureSnapshots(projectId);
+      setSnapshots(items);
+      if (!items.some((item) => item.id === snapshotId)) {
+        setSnapshotError("Snapshot was created, but the refreshed list did not include it. Reopen snapshots to refresh.");
+      }
+    } catch (error) {
+      console.error("Error creating snapshot:", error);
+      setSnapshotError(
+        getFirestoreErrorCode(error) === "permission-denied"
+          ? "Permission denied. Save the architecture and confirm you own its workspace."
+          : "Could not create snapshot. Your current architecture may have been saved; please retry.",
+      );
+    } finally {
+      setSnapshotSaving(false);
+    }
+  };
+
   const runArchitectureLint = () => {
     const architectureIR = reactFlowToArchitectureIR({ nodes, edges });
     setLintResult(lintArchitecture(architectureIR));
@@ -620,6 +717,13 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => void openSnapshots()}
+            className="text-cyan-300 hover:text-cyan-200 border border-cyan-900/50 hover:bg-cyan-950/30 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            <History size={16} /> Snapshots
+          </button>
+
           <button
             onClick={runArchitectureLint}
             className="text-amber-300 hover:text-amber-200 border border-amber-900/50 hover:bg-amber-950/30 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
@@ -869,6 +973,76 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
               >
                 Save to Cloud
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSnapshotsModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-2xl w-full shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
+                <History className="text-cyan-300" size={20} /> Architecture Snapshots
+              </h3>
+              <button onClick={() => setShowSnapshotsModal(false)} className="text-slate-500 hover:text-slate-300 transition-colors">✕</button>
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 mb-5">
+              <h4 className="text-sm font-semibold text-slate-100 mb-3 flex items-center gap-2">
+                <Camera size={16} className="text-cyan-300" /> Create immutable snapshot
+              </h4>
+              <label className="block text-xs text-slate-400 mb-1">Snapshot name</label>
+              <input
+                value={snapshotName}
+                onChange={(event) => setSnapshotName(event.target.value)}
+                maxLength={100}
+                placeholder="e.g. Before database migration"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500 mb-3"
+              />
+              <label className="block text-xs text-slate-400 mb-1">Note (optional)</label>
+              <textarea
+                value={snapshotMessage}
+                onChange={(event) => setSnapshotMessage(event.target.value)}
+                maxLength={500}
+                rows={2}
+                placeholder="What changed or why this version matters"
+                className="w-full resize-y bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500 mb-3"
+              />
+              {snapshotError && <p className="text-sm text-red-300 mb-3">{snapshotError}</p>}
+              <div className="flex justify-end">
+                <button
+                  onClick={() => void handleCreateSnapshot()}
+                  disabled={snapshotSaving || !snapshotName.trim()}
+                  className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  {snapshotSaving ? "Creating..." : "Create Snapshot"}
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 overflow-y-auto space-y-3">
+              <h4 className="text-sm font-semibold text-slate-200">Saved snapshots</h4>
+              {snapshotsLoading ? (
+                <p className="text-sm text-slate-400 py-4">Loading snapshots…</p>
+              ) : snapshots.length === 0 ? (
+                <p className="text-sm text-slate-400 rounded-xl border border-dashed border-slate-700 p-4">No snapshots yet. Create one to preserve this version.</p>
+              ) : snapshots.map((snapshot) => (
+                <div key={snapshot.id} className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-slate-100">{snapshot.name}</p>
+                      {snapshot.message && <p className="text-sm text-slate-400 mt-1">{snapshot.message}</p>}
+                      <p className="text-xs text-slate-500 mt-2">Snapshot ID: {snapshot.id}</p>
+                    </div>
+                    <span className="shrink-0 rounded-md bg-cyan-950/60 text-cyan-200 px-2 py-1 text-xs">Immutable</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end mt-5">
+              <button onClick={() => setShowSnapshotsModal(false)} className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors">Close</button>
             </div>
           </div>
         </div>
