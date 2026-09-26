@@ -66,6 +66,30 @@ service cloud.firestore {
 
       allow delete: if isSignedIn()
         && resource.data.ownerId == request.auth.uid;
+
+      // Snapshots are immutable: owners may create and read them, but cannot
+      // update or delete a historical version.
+      match /snapshots/{snapshotId} {
+        function isParentArchitectureOwner() {
+          return isSignedIn()
+            && exists(/databases/$(database)/documents/architectures/$(architectureId))
+            && get(/databases/$(database)/documents/architectures/$(architectureId)).data.ownerId == request.auth.uid;
+        }
+
+        allow get, list: if isParentArchitectureOwner();
+
+        allow create: if isParentArchitectureOwner()
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.architectureId == architectureId
+          && request.resource.data.workspaceId == get(/databases/$(database)/documents/architectures/$(architectureId)).data.workspaceId
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.architectureIR is map
+          && request.resource.data.canvasLayout is map;
+
+        allow update, delete: if false;
+      }
     }
   }
 }
