@@ -98,7 +98,8 @@ function StudioEditor() {
     useState<ReactFlowInstance | null>(null);
 
   const [showAIReviewModal, setShowAIReviewModal] = useState(false);
-  const [showLintModal, setShowLintModal] = useState(false);\n  const [lintResult, setLintResult] = useState<ArchitectureLintResult | null>(null);
+  const [showLintModal, setShowLintModal] = useState(false);
+  const [lintResult, setLintResult] = useState<ArchitectureLintResult | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
 
