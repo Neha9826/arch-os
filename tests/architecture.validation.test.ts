@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { validateArchitectureIR } from "@/domain/architecture/validation";
+import {
+  assertValidArchitectureIR,
+  validateArchitectureIR,
+} from "@/domain/architecture/validation";
 import type { ArchitectureIR } from "@/domain/architecture/types";
 
 const validArchitecture: ArchitectureIR = {
@@ -151,6 +154,28 @@ describe("Architecture IR validation", () => {
       path: "relations[2].id",
       message: 'Duplicate relation ID "client-api".',
     });
+  });
+
+  test("asserts when an architecture is invalid", () => {
+    const invalidArchitecture = {
+      schemaVersion: 1,
+      components: [
+        {
+          id: "service",
+          kind: "not-a-kind",
+          name: "Service",
+        },
+      ],
+      relations: [],
+    };
+
+    expect(() => assertValidArchitectureIR(invalidArchitecture)).toThrow(
+      'Invalid Architecture IR. components[0].kind: Unsupported component kind "not-a-kind".',
+    );
+  });
+
+  test("does not throw for a valid architecture", () => {
+    expect(() => assertValidArchitectureIR(validArchitecture)).not.toThrow();
   });
 
   test("rejects empty component IDs", () => {
