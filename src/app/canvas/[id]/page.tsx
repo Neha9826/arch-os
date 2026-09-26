@@ -299,6 +299,7 @@ function StudioEditor() {
           workspaceId: resolvedWorkspaceId,
           nodes: persistenceState.nodes,
           edges: persistenceState.edges,
+          architectureIR,
         });
 
         setProjectTitle(finalTitle);
