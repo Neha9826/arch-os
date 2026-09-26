@@ -93,7 +93,7 @@ function StudioEditor() {
   const [reactFlowInstance, setReactFlowInstance] =
     useState<ReactFlowInstance | null>(null);
 
-  const [showAIReviewModal, setShowAIReviewModal] = useState(false);
+  const [showAIReviewModal, setShowAIReviewModal] = useState(false);\n  const [showLintModal, setShowLintModal] = useState(false);\n  const [lintResult, setLintResult] = useState<ArchitectureLintResult | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
 
@@ -424,7 +424,7 @@ function StudioEditor() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const generateAIReviewPrompt = () => {
+  const runArchitectureLint = () => {\n    const architectureIR = reactFlowToArchitectureIR({ nodes, edges });\n    setLintResult(lintArchitecture(architectureIR));\n    setShowLintModal(true);\n  };\n\n  const generateAIReviewPrompt = () => {
     let architectureText = "System Architecture Nodes:\n";
 
     nodes.forEach((n) => {
@@ -849,6 +849,47 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
               >
                 Save to Cloud
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLintModal && lintResult && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-3xl w-full shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
+                <ShieldCheck className="text-amber-300" size={20} />
+                Architecture Lint
+              </h3>
+              <button onClick={() => setShowLintModal(false)} className="text-slate-500 hover:text-slate-300 transition-colors">✕</button>
+            </div>
+            <div className="flex gap-3 mb-5 text-sm">
+              <span className="rounded-lg bg-red-950/50 text-red-200 px-3 py-2">{lintResult.summary.errors} errors</span>
+              <span className="rounded-lg bg-amber-950/50 text-amber-200 px-3 py-2">{lintResult.summary.warnings} warnings</span>
+              <span className="rounded-lg bg-blue-950/50 text-blue-200 px-3 py-2">{lintResult.summary.info} info</span>
+            </div>
+            <div className="overflow-y-auto space-y-3 pr-1">
+              {lintResult.findings.length === 0 ? (
+                <div className="rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-5 text-emerald-200">
+                  No findings. The current architecture passed the available structural checks.
+                </div>
+              ) : lintResult.findings.map((finding, index) => (
+                <div key={finding.code + (finding.componentId ?? finding.relationId ?? index)} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                  <div className="flex items-start gap-3">
+                    {finding.severity === "error" ? <AlertTriangle className="mt-0.5 text-red-300" size={18} /> : finding.severity === "warning" ? <AlertTriangle className="mt-0.5 text-amber-300" size={18} /> : <Info className="mt-0.5 text-blue-300" size={18} />}
+                    <div>
+                      <p className="font-medium text-slate-100">{finding.title}</p>
+                      <p className="mt-1 text-sm text-slate-300">{finding.message}</p>
+                      <p className="mt-2 text-sm text-slate-400">{finding.recommendation}</p>
+                      <p className="mt-2 text-xs text-slate-500">Rule: {finding.code}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end mt-6">
+              <button onClick={() => setShowLintModal(false)} className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-colors">Close</button>
             </div>
           </div>
         </div>
