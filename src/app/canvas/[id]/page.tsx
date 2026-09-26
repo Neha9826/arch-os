@@ -97,7 +97,8 @@ function StudioEditor() {
   const [reactFlowInstance, setReactFlowInstance] =
     useState<ReactFlowInstance | null>(null);
 
-  const [showAIReviewModal, setShowAIReviewModal] = useState(false);\n  const [showLintModal, setShowLintModal] = useState(false);\n  const [lintResult, setLintResult] = useState<ArchitectureLintResult | null>(null);
+  const [showAIReviewModal, setShowAIReviewModal] = useState(false);
+  const [showLintModal, setShowLintModal] = useState(false);\n  const [lintResult, setLintResult] = useState<ArchitectureLintResult | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
 
@@ -428,7 +429,13 @@ function StudioEditor() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const runArchitectureLint = () => {\n    const architectureIR = reactFlowToArchitectureIR({ nodes, edges });\n    setLintResult(lintArchitecture(architectureIR));\n    setShowLintModal(true);\n  };\n\n  const generateAIReviewPrompt = () => {
+  const runArchitectureLint = () => {
+    const architectureIR = reactFlowToArchitectureIR({ nodes, edges });
+    setLintResult(lintArchitecture(architectureIR));
+    setShowLintModal(true);
+  };
+
+  const generateAIReviewPrompt = () => {
     let architectureText = "System Architecture Nodes:\n";
 
     nodes.forEach((n) => {
