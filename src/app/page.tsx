@@ -149,7 +149,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl">
             {user.photoURL ? (
-              <img src={user.photoURL} alt="Avatar" className="w-7 h-7 rounded-full object-cover" />
+              <Image src={user.photoURL} alt="Avatar" width={28} height={28} className="w-7 h-7 rounded-full object-cover" />
             ) : (
               <div className="w-7 h-7 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center font-semibold text-xs">
                 <UserIcon size={14} />
