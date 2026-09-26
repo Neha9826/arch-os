@@ -620,6 +620,13 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
 
         <div className="flex items-center gap-3">
           <button
+            onClick={runArchitectureLint}
+            className="text-amber-300 hover:text-amber-200 border border-amber-900/50 hover:bg-amber-950/30 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            <ShieldCheck size={16} /> Architecture Lint
+          </button>
+
+          <button
             onClick={generateAIReviewPrompt}
             className="text-purple-400 hover:text-purple-300 border border-purple-900/50 hover:bg-purple-950/30 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
           >
