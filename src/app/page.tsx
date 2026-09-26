@@ -201,9 +201,13 @@ export default function Dashboard() {
             </button>
           </div>
 
-          <div className="mt-auto p-4 rounded-2xl bg-gradient-to-br from-blue-950/40 to-slate-900 border border-blue-900/30 text-xs">
-            <p className="font-semibold text-blue-400 mb-1">micro1 Evaluation</p>
-            <p className="text-slate-400 leading-relaxed">Multi-tenant cloud architecture designer with automated IaC generation.</p>
+          <div className="mt-auto p-4 rounded-2xl bg-gradient-to-br from-blue-950/40 to-slate-900 border border-blue-900/30">
+            <p className="text-sm font-semibold text-slate-200">
+              A product by <span className="text-blue-400">Dev Engine AI</span>
+            </p>
+            <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+              Engineering better systems, from idea to infrastructure.
+            </p>
           </div>
         </aside>
 
