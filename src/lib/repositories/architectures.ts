@@ -27,6 +27,11 @@ export type Architecture = {
   workspaceId?: string;
   nodes: Array<Node<{ label: string }>>;
   edges: Edge[];
+  /** React Flow presentation/layout state; Architecture IR remains the semantic source of truth. */
+  canvasLayout?: {
+    nodes: Array<Node<{ label: string }>>;
+    edges: Edge[];
+  };
   architectureIR?: ArchitectureIR;
   createdAt?: unknown;
   updatedAt?: unknown;
@@ -42,6 +47,12 @@ function toArchitecture(id: string, data: Record<string, unknown>): Architecture
       ? (data.nodes as Array<Node<{ label: string }>>)
       : [],
     edges: Array.isArray(data.edges) ? (data.edges as Edge[]) : [],
+    canvasLayout:
+      typeof data.canvasLayout === "object" && data.canvasLayout !== null
+        && Array.isArray((data.canvasLayout as Record<string, unknown>).nodes)
+        && Array.isArray((data.canvasLayout as Record<string, unknown>).edges)
+        ? (data.canvasLayout as { nodes: Array<Node<{ label: string }>>; edges: Edge[] })
+        : undefined,
     architectureIR: isValidArchitectureIR(data.architectureIR)
       ? data.architectureIR
       : undefined,
@@ -84,6 +95,7 @@ export async function createArchitecture(input: {
   workspaceId: string;
   nodes: Array<Node<{ label: string }>>;
   edges: Edge[];
+  canvasLayout: { nodes: Array<Node<{ label: string }>>; edges: Edge[] };
   architectureIR: ArchitectureIR;
 }): Promise<string> {
   assertValidArchitectureIR(input.architectureIR);
@@ -94,6 +106,7 @@ export async function createArchitecture(input: {
     workspaceId: input.workspaceId,
     nodes: toFirestoreSafe(input.nodes),
     edges: toFirestoreSafe(input.edges),
+    canvasLayout: toFirestoreSafe(input.canvasLayout),
     architectureIR: toFirestoreSafe(input.architectureIR),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -108,6 +121,7 @@ export async function updateArchitecture(input: {
   workspaceId?: string;
   nodes: Array<Node<{ label: string }>>;
   edges: Edge[];
+  canvasLayout: { nodes: Array<Node<{ label: string }>>; edges: Edge[] };
   architectureIR: ArchitectureIR;
 }): Promise<void> {
   assertValidArchitectureIR(input.architectureIR);
@@ -116,6 +130,7 @@ export async function updateArchitecture(input: {
     name: input.name,
     nodes: toFirestoreSafe(input.nodes),
     edges: toFirestoreSafe(input.edges),
+    canvasLayout: toFirestoreSafe(input.canvasLayout),
     architectureIR: toFirestoreSafe(input.architectureIR),
     updatedAt: serverTimestamp(),
   };
