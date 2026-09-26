@@ -103,6 +103,19 @@ describe("Architecture lint", () => {
     expect(result.summary).toEqual({ errors: 0, warnings: 0, info: 0 });
   });
 
+  test("does not treat a self-loop as a connection to another component", () => {
+    const result = lintArchitecture({
+      schemaVersion: 1,
+      components: [{ id: "worker", kind: "service", name: "Worker" }],
+      relations: [
+        { id: "worker-loop", source: "worker", target: "worker", kind: "depends-on" },
+      ],
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain("component.isolated");
+    expect(result.findings.map((finding) => finding.code)).toContain("relation.self_loop");
+  });
+
   test("does not mutate the supplied architecture", () => {
     const architecture = structuredClone(connectedArchitecture);
 
