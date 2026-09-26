@@ -12,6 +12,8 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import type { ArchitectureIR } from "@/domain/architecture/types";
+import { isValidArchitectureIR } from "@/domain/architecture/validation";
 
 const ARCHITECTURES_COLLECTION = "architectures";
 
@@ -22,6 +24,7 @@ export type Architecture = {
   workspaceId?: string;
   nodes: Array<Node<{ label: string }>>;
   edges: Edge[];
+  architectureIR?: ArchitectureIR;
   createdAt?: unknown;
   updatedAt?: unknown;
 };
@@ -36,6 +39,9 @@ function toArchitecture(id: string, data: Record<string, unknown>): Architecture
       ? (data.nodes as Array<Node<{ label: string }>>)
       : [],
     edges: Array.isArray(data.edges) ? (data.edges as Edge[]) : [],
+    architectureIR: isValidArchitectureIR(data.architectureIR)
+      ? data.architectureIR
+      : undefined,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };
@@ -75,6 +81,7 @@ export async function createArchitecture(input: {
   workspaceId: string;
   nodes: Array<Node<{ label: string }>>;
   edges: Edge[];
+  architectureIR: ArchitectureIR;
 }): Promise<string> {
   const architectureRef = await addDoc(collection(db, ARCHITECTURES_COLLECTION), {
     name: input.name,
@@ -82,6 +89,7 @@ export async function createArchitecture(input: {
     workspaceId: input.workspaceId,
     nodes: toFirestoreSafe(input.nodes),
     edges: toFirestoreSafe(input.edges),
+    architectureIR: toFirestoreSafe(input.architectureIR),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -95,11 +103,13 @@ export async function updateArchitecture(input: {
   workspaceId?: string;
   nodes: Array<Node<{ label: string }>>;
   edges: Edge[];
+  architectureIR: ArchitectureIR;
 }): Promise<void> {
   const update: Record<string, unknown> = {
     name: input.name,
     nodes: toFirestoreSafe(input.nodes),
     edges: toFirestoreSafe(input.edges),
+    architectureIR: toFirestoreSafe(input.architectureIR),
     updatedAt: serverTimestamp(),
   };
 
