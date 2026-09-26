@@ -13,7 +13,10 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { ArchitectureIR } from "@/domain/architecture/types";
-import { isValidArchitectureIR } from "@/domain/architecture/validation";
+import {
+  assertValidArchitectureIR,
+  isValidArchitectureIR,
+} from "@/domain/architecture/validation";
 
 const ARCHITECTURES_COLLECTION = "architectures";
 
@@ -83,6 +86,8 @@ export async function createArchitecture(input: {
   edges: Edge[];
   architectureIR: ArchitectureIR;
 }): Promise<string> {
+  assertValidArchitectureIR(input.architectureIR);
+
   const architectureRef = await addDoc(collection(db, ARCHITECTURES_COLLECTION), {
     name: input.name,
     ownerId: input.ownerId,
@@ -105,6 +110,8 @@ export async function updateArchitecture(input: {
   edges: Edge[];
   architectureIR: ArchitectureIR;
 }): Promise<void> {
+  assertValidArchitectureIR(input.architectureIR);
+
   const update: Record<string, unknown> = {
     name: input.name,
     nodes: toFirestoreSafe(input.nodes),
