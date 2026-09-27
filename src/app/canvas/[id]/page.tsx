@@ -1227,7 +1227,7 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
             {snapshotError && (
               <p className="shrink-0 border-b border-red-900/60 bg-red-950/40 px-5 py-3 text-sm text-red-200">{snapshotError}</p>
             )}
-            <div className="relative min-h-[360px] w-full flex-1 bg-slate-950" style={{ height: "65vh", width: "100%" }}>
+            <div className="relative min-h-[360px] w-full flex-none bg-slate-950" style={{ height: "65vh", width: "100%" }}>
               {selectedSnapshotLayout && selectedSnapshotLayout.nodes.length > 0 ? (
                 <ReactFlowProvider>
                   <ReactFlow
@@ -1236,6 +1236,12 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                     nodeTypes={nodeTypes}
                     fitView
                     fitViewOptions={{ padding: 0.25, minZoom: 0.25, maxZoom: 1.5 }}
+                    onInit={(instance) => {
+                      requestAnimationFrame(() => {
+                        instance.fitView({ padding: 0.25, minZoom: 0.25, maxZoom: 1.5 });
+                      });
+                    }}
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
                     nodesDraggable={false}
                     nodesConnectable={false}
                     elementsSelectable={false}
