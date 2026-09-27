@@ -50,6 +50,7 @@ import {
   Info,
   History,
   Camera,
+  Eye,
 } from "lucide-react";
 
 const nodeTypes = {
@@ -113,6 +114,7 @@ function StudioEditor() {
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [snapshotSaving, setSnapshotSaving] = useState(false);
   const [restoringSnapshotId, setRestoringSnapshotId] = useState<string | null>(null);
+  const [selectedSnapshot, setSelectedSnapshot] = useState<ArchitectureSnapshot | null>(null);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [lintResult, setLintResult] = useState<ArchitectureLintResult | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -576,8 +578,17 @@ function StudioEditor() {
       setNodes(restoredLayout.nodes);
       setEdges(restoredLayout.edges);
       setWorkspaceId(resolvedWorkspaceId);
+      isLoadingData.current = true;
+      setNodes(restoredLayout.nodes);
+      setEdges(restoredLayout.edges);
+      setWorkspaceId(resolvedWorkspaceId);
       setHasUnsavedChanges(false);
       setSaveNotice(`Restored snapshot: ${snapshot.name}`);
+      setSelectedSnapshot(null);
+      setShowSnapshotsModal(false);
+      setTimeout(() => {
+        isLoadingData.current = false;
+      }, 0);
 
       const refreshedSnapshots = await listArchitectureSnapshots(projectId);
       setSnapshots(refreshedSnapshots);
@@ -1103,6 +1114,15 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                     <div className="flex shrink-0 flex-col items-end gap-2">
                       <span className="rounded-md bg-cyan-950/60 text-cyan-200 px-2 py-1 text-xs">Immutable</span>
                       <button
+                        onClick={() => {
+                          setSelectedSnapshot(snapshot);
+                          setSnapshotError(null);
+                        }}
+                        className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 transition-colors hover:bg-slate-700"
+                      >
+                        <Eye size={14} /> Preview
+                      </button>
+                      <button
                         onClick={() => void handleRestoreSnapshot(snapshot)}
                         disabled={restoringSnapshotId !== null || snapshotSaving}
                         className="rounded-lg border border-amber-700/60 bg-amber-950/40 px-3 py-1.5 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-900/50 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1117,6 +1137,61 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
 
             <div className="flex justify-end mt-5">
               <button onClick={() => setShowSnapshotsModal(false)} className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedSnapshot && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-800 px-5 py-4">
+              <div className="min-w-0">
+                <h3 className="truncate text-lg font-semibold text-slate-100">Snapshot preview: {selectedSnapshot.name}</h3>
+                <p className="mt-1 text-xs text-slate-400">Read-only view · Your current architecture is unchanged until you restore.</p>
+              </div>
+              <button
+                onClick={() => setSelectedSnapshot(null)}
+                className="rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+              >
+                Close
+              </button>
+            </div>
+            {snapshotError && (
+              <p className="shrink-0 border-b border-red-900/60 bg-red-950/40 px-5 py-3 text-sm text-red-200">{snapshotError}</p>
+            )}
+            <div className="min-h-[360px] flex-1 bg-slate-950" style={{ height: "65vh" }}>
+              <ReactFlowProvider>
+                <ReactFlow
+                  nodes={architectureIRToReactFlow(selectedSnapshot.architectureIR, selectedSnapshot.canvasLayout).nodes}
+                  edges={architectureIRToReactFlow(selectedSnapshot.architectureIR, selectedSnapshot.canvasLayout).edges}
+                  nodeTypes={nodeTypes}
+                  fitView
+                  nodesDraggable={false}
+                  nodesConnectable={false}
+                  elementsSelectable={false}
+                  panOnDrag
+                  zoomOnScroll
+                >
+                  <Background color="#334155" gap={20} />
+                  <Controls />
+                </ReactFlow>
+              </ReactFlowProvider>
+            </div>
+            <div className="flex shrink-0 justify-end gap-3 border-t border-slate-800 px-5 py-4">
+              <button
+                onClick={() => setSelectedSnapshot(null)}
+                className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleRestoreSnapshot(selectedSnapshot)}
+                disabled={restoringSnapshotId !== null || snapshotSaving}
+                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {restoringSnapshotId === selectedSnapshot.id ? "Restoring..." : "Restore this version"}
+              </button>
             </div>
           </div>
         </div>
