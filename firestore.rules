@@ -88,7 +88,21 @@ service cloud.firestore {
           && request.resource.data.architectureIR is map
           && request.resource.data.canvasLayout is map;
 
-        allow update, delete: if false;
+        allow update: if isParentArchitectureOwner()
+          && request.resource.data.architectureId == resource.data.architectureId
+          && request.resource.data.workspaceId == resource.data.workspaceId
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.architectureIR == resource.data.architectureIR
+          && request.resource.data.canvasLayout == resource.data.canvasLayout
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 100
+          && request.resource.data.message is string
+          && request.resource.data.message.size() <= 500;
+
+        allow delete: if isParentArchitectureOwner();
       }
     }
   }
