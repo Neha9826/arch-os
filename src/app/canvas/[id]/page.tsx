@@ -980,7 +980,7 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
 
       {showSnapshotsModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-2xl w-full shadow-2xl flex flex-col max-h-[85vh]">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[85vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-5">
               <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
                 <History className="text-cyan-300" size={20} /> Architecture Snapshots
@@ -1021,7 +1021,7 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
               </div>
             </div>
 
-            <div className="min-h-0 overflow-y-auto space-y-3">
+            <div className="space-y-3">
               <h4 className="text-sm font-semibold text-slate-200">Saved snapshots</h4>
               {snapshotsLoading ? (
                 <p className="text-sm text-slate-400 py-4">Loading snapshots…</p>
