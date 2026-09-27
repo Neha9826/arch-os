@@ -34,6 +34,8 @@ import { ensurePersonalWorkspace } from "@/lib/repositories/workspaces";
 import {
   createArchitectureSnapshot,
   listArchitectureSnapshots,
+  updateArchitectureSnapshot,
+  deleteArchitectureSnapshot,
   type ArchitectureSnapshot,
 } from "@/lib/repositories/architectureSnapshots";
 import { useParams, useRouter } from "next/navigation";
@@ -115,6 +117,10 @@ function StudioEditor() {
   const [snapshotSaving, setSnapshotSaving] = useState(false);
   const [restoringSnapshotId, setRestoringSnapshotId] = useState<string | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = useState<ArchitectureSnapshot | null>(null);
+  const [editingSnapshotId, setEditingSnapshotId] = useState<string | null>(null);
+  const [editingSnapshotName, setEditingSnapshotName] = useState("");
+  const [editingSnapshotMessage, setEditingSnapshotMessage] = useState("");
+  const [snapshotActionId, setSnapshotActionId] = useState<string | null>(null);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [lintResult, setLintResult] = useState<ArchitectureLintResult | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -147,6 +153,10 @@ function StudioEditor() {
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   const isLoadingData = useRef(true);
+
+  const selectedSnapshotLayout = selectedSnapshot
+    ? architectureIRToReactFlow(selectedSnapshot.architectureIR, selectedSnapshot.canvasLayout)
+    : null;
 
   useEffect(() => {
     if (isLoadingData.current) return;
@@ -531,6 +541,62 @@ function StudioEditor() {
     }
   };
 
+  const handleEditSnapshot = async (snapshot: ArchitectureSnapshot) => {
+    if (snapshotActionId) return;
+    const name = editingSnapshotName.trim();
+    if (!name) {
+      setSnapshotError("Snapshot name cannot be empty.");
+      return;
+    }
+
+    setSnapshotActionId(snapshot.id);
+    setSnapshotError(null);
+    try {
+      await updateArchitectureSnapshot(projectId, snapshot.id, {
+        name,
+        message: editingSnapshotMessage,
+      });
+      setSnapshots((current) => current.map((item) =>
+        item.id === snapshot.id
+          ? { ...item, name, message: editingSnapshotMessage.trim() || undefined }
+          : item
+      ));
+      setEditingSnapshotId(null);
+    } catch (error) {
+      console.error("Error updating snapshot:", error);
+      setSnapshotError(
+        getFirestoreErrorCode(error) === "permission-denied"
+          ? "Permission denied. This snapshot could not be edited."
+          : "Could not edit this snapshot. Please try again.",
+      );
+    } finally {
+      setSnapshotActionId(null);
+    }
+  };
+
+  const handleDeleteSnapshot = async (snapshot: ArchitectureSnapshot) => {
+    if (snapshotActionId) return;
+    if (!window.confirm(`Delete snapshot "${snapshot.name}"? This cannot be undone.`)) return;
+
+    setSnapshotActionId(snapshot.id);
+    setSnapshotError(null);
+    try {
+      await deleteArchitectureSnapshot(projectId, snapshot.id);
+      setSnapshots((current) => current.filter((item) => item.id !== snapshot.id));
+      if (selectedSnapshot?.id === snapshot.id) setSelectedSnapshot(null);
+      if (editingSnapshotId === snapshot.id) setEditingSnapshotId(null);
+    } catch (error) {
+      console.error("Error deleting snapshot:", error);
+      setSnapshotError(
+        getFirestoreErrorCode(error) === "permission-denied"
+          ? "Permission denied. This snapshot could not be deleted."
+          : "Could not delete this snapshot. Please try again.",
+      );
+    } finally {
+      setSnapshotActionId(null);
+    }
+  };
+
   const handleRestoreSnapshot = async (snapshot: ArchitectureSnapshot) => {
     if (!user || isNewProject || restoringSnapshotId) return;
 
@@ -543,10 +609,13 @@ function StudioEditor() {
     setSnapshotError(null);
 
     try {
-      const workspace = await ensurePersonalWorkspace(user.uid);
-      const resolvedWorkspaceId = workspaceId || workspace.id;
       const currentIR = reactFlowToArchitectureIR({ nodes, edges });
       const currentLayout = architectureIRToReactFlow(currentIR, { nodes, edges });
+      const architecture = await getArchitecture(projectId);
+      if (!architecture || architecture.ownerId !== user.uid) {
+        throw new Error("Architecture not found or access denied.");
+      }
+      const resolvedWorkspaceId = architecture.workspaceId || workspaceId || (await ensurePersonalWorkspace(user.uid)).id;
 
       // Preserve the current state before replacing it with the selected snapshot.
       await createArchitectureSnapshot({
@@ -575,9 +644,6 @@ function StudioEditor() {
         architectureIR: snapshot.architectureIR,
       });
 
-      setNodes(restoredLayout.nodes);
-      setEdges(restoredLayout.edges);
-      setWorkspaceId(resolvedWorkspaceId);
       isLoadingData.current = true;
       setNodes(restoredLayout.nodes);
       setEdges(restoredLayout.edges);
@@ -597,7 +663,7 @@ function StudioEditor() {
       setSnapshotError(
         getFirestoreErrorCode(error) === "permission-denied"
           ? "Permission denied. The snapshot could not be restored."
-          : "Could not restore this snapshot. Your current canvas was not intentionally changed.",
+          : error instanceof Error ? error.message : "Could not restore this snapshot. Please try again.",
       );
     } finally {
       setRestoringSnapshotId(null);
@@ -1105,32 +1171,33 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                 <p className="text-sm text-slate-400 rounded-xl border border-dashed border-slate-700 p-4">No snapshots yet. Create one to preserve this version.</p>
               ) : snapshots.map((snapshot) => (
                 <div key={snapshot.id} className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-slate-100">{snapshot.name}</p>
-                      {snapshot.message && <p className="text-sm text-slate-400 mt-1">{snapshot.message}</p>}
-                      <p className="text-xs text-slate-500 mt-2">Snapshot ID: {snapshot.id}</p>
+                  {editingSnapshotId === snapshot.id ? (
+                    <div className="space-y-3">
+                      <label className="block text-xs text-slate-400">Snapshot name</label>
+                      <input value={editingSnapshotName} onChange={(event) => setEditingSnapshotName(event.target.value)} maxLength={100} className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100" />
+                      <label className="block text-xs text-slate-400">Note</label>
+                      <textarea value={editingSnapshotMessage} onChange={(event) => setEditingSnapshotMessage(event.target.value)} maxLength={500} rows={2} className="w-full resize-y rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100" />
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => setEditingSnapshotId(null)} className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200">Cancel</button>
+                        <button onClick={() => void handleEditSnapshot(snapshot)} disabled={snapshotActionId !== null} className="rounded-lg bg-cyan-700 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">{snapshotActionId === snapshot.id ? "Saving..." : "Save details"}</button>
+                      </div>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-2">
-                      <span className="rounded-md bg-cyan-950/60 text-cyan-200 px-2 py-1 text-xs">Immutable</span>
-                      <button
-                        onClick={() => {
-                          setSelectedSnapshot(snapshot);
-                          setSnapshotError(null);
-                        }}
-                        className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 transition-colors hover:bg-slate-700"
-                      >
-                        <Eye size={14} /> Preview
-                      </button>
-                      <button
-                        onClick={() => void handleRestoreSnapshot(snapshot)}
-                        disabled={restoringSnapshotId !== null || snapshotSaving}
-                        className="rounded-lg border border-amber-700/60 bg-amber-950/40 px-3 py-1.5 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-900/50 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {restoringSnapshotId === snapshot.id ? "Restoring..." : "Restore"}
-                      </button>
+                  ) : (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-100">{snapshot.name}</p>
+                        {snapshot.message && <p className="mt-1 text-sm text-slate-400">{snapshot.message}</p>}
+                        <p className="mt-2 text-xs text-slate-500">Snapshot ID: {snapshot.id}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-2">
+                        <span className="rounded-md bg-cyan-950/60 px-2 py-1 text-xs text-cyan-200">Saved version</span>
+                        <button onClick={() => { setSelectedSnapshot(snapshot); setSnapshotError(null); }} className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700"><Eye size={14} /> Preview</button>
+                        <button onClick={() => void handleRestoreSnapshot(snapshot)} disabled={restoringSnapshotId !== null || snapshotSaving || snapshotActionId !== null} className="rounded-lg border border-amber-700/60 bg-amber-950/40 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-900/50 disabled:cursor-not-allowed disabled:opacity-50">{restoringSnapshotId === snapshot.id ? "Restoring..." : "Restore"}</button>
+                        <button onClick={() => { setEditingSnapshotId(snapshot.id); setEditingSnapshotName(snapshot.name); setEditingSnapshotMessage(snapshot.message ?? ""); setSnapshotError(null); }} disabled={snapshotActionId !== null} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50">Edit</button>
+                        <button onClick={() => void handleDeleteSnapshot(snapshot)} disabled={snapshotActionId !== null || restoringSnapshotId !== null} className="rounded-lg border border-red-900/70 px-3 py-1.5 text-xs text-red-300 hover:bg-red-950/50 disabled:opacity-50">{snapshotActionId === snapshot.id ? "Working..." : "Delete"}</button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1160,23 +1227,31 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
             {snapshotError && (
               <p className="shrink-0 border-b border-red-900/60 bg-red-950/40 px-5 py-3 text-sm text-red-200">{snapshotError}</p>
             )}
-            <div className="min-h-[360px] flex-1 bg-slate-950" style={{ height: "65vh" }}>
-              <ReactFlowProvider>
-                <ReactFlow
-                  nodes={architectureIRToReactFlow(selectedSnapshot.architectureIR, selectedSnapshot.canvasLayout).nodes}
-                  edges={architectureIRToReactFlow(selectedSnapshot.architectureIR, selectedSnapshot.canvasLayout).edges}
-                  nodeTypes={nodeTypes}
-                  fitView
-                  nodesDraggable={false}
-                  nodesConnectable={false}
-                  elementsSelectable={false}
-                  panOnDrag
-                  zoomOnScroll
-                >
-                  <Background color="#334155" gap={20} />
-                  <Controls />
-                </ReactFlow>
-              </ReactFlowProvider>
+            <div className="relative min-h-[360px] w-full flex-1 bg-slate-950" style={{ height: "65vh", width: "100%" }}>
+              {selectedSnapshotLayout && selectedSnapshotLayout.nodes.length > 0 ? (
+                <ReactFlowProvider>
+                  <ReactFlow
+                    nodes={selectedSnapshotLayout.nodes}
+                    edges={selectedSnapshotLayout.edges}
+                    nodeTypes={nodeTypes}
+                    fitView
+                    fitViewOptions={{ padding: 0.25, minZoom: 0.25, maxZoom: 1.5 }}
+                    nodesDraggable={false}
+                    nodesConnectable={false}
+                    elementsSelectable={false}
+                    panOnDrag
+                    zoomOnScroll
+                    proOptions={{ hideAttribution: true }}
+                  >
+                    <Background color="#334155" gap={20} />
+                    <Controls className="bg-slate-800 border-slate-700 fill-white" />
+                  </ReactFlow>
+                </ReactFlowProvider>
+              ) : (
+                <div className="flex h-full items-center justify-center p-8 text-center text-sm text-slate-400">
+                  This snapshot contains no components to preview.
+                </div>
+              )}
             </div>
             <div className="flex shrink-0 justify-end gap-3 border-t border-slate-800 px-5 py-4">
               <button
