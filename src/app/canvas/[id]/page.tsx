@@ -112,6 +112,7 @@ function StudioEditor() {
   const [snapshotMessage, setSnapshotMessage] = useState("");
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [snapshotSaving, setSnapshotSaving] = useState(false);
+  const [restoringSnapshotId, setRestoringSnapshotId] = useState<string | null>(null);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [lintResult, setLintResult] = useState<ArchitectureLintResult | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -525,6 +526,70 @@ function StudioEditor() {
       );
     } finally {
       setSnapshotSaving(false);
+    }
+  };
+
+  const handleRestoreSnapshot = async (snapshot: ArchitectureSnapshot) => {
+    if (!user || isNewProject || restoringSnapshotId) return;
+
+    const confirmed = window.confirm(
+      `Restore "${snapshot.name}"? Your current canvas will first be saved as a safety snapshot.`,
+    );
+    if (!confirmed) return;
+
+    setRestoringSnapshotId(snapshot.id);
+    setSnapshotError(null);
+
+    try {
+      const workspace = await ensurePersonalWorkspace(user.uid);
+      const resolvedWorkspaceId = workspaceId || workspace.id;
+      const currentIR = reactFlowToArchitectureIR({ nodes, edges });
+      const currentLayout = architectureIRToReactFlow(currentIR, { nodes, edges });
+
+      // Preserve the current state before replacing it with the selected snapshot.
+      await createArchitectureSnapshot({
+        architectureId: projectId,
+        workspaceId: resolvedWorkspaceId,
+        ownerId: user.uid,
+        createdBy: user.uid,
+        name: `Before restore — ${new Date().toLocaleString()}`,
+        message: `Automatic safety snapshot before restoring "${snapshot.name}".`,
+        architectureIR: currentIR,
+        canvasLayout: currentLayout,
+      });
+
+      const restoredLayout = architectureIRToReactFlow(
+        snapshot.architectureIR,
+        snapshot.canvasLayout,
+      );
+
+      await updateArchitecture({
+        id: projectId,
+        name: projectTitle,
+        workspaceId: resolvedWorkspaceId,
+        nodes: restoredLayout.nodes,
+        edges: restoredLayout.edges,
+        canvasLayout: restoredLayout,
+        architectureIR: snapshot.architectureIR,
+      });
+
+      setNodes(restoredLayout.nodes);
+      setEdges(restoredLayout.edges);
+      setWorkspaceId(resolvedWorkspaceId);
+      setHasUnsavedChanges(false);
+      setSaveNotice(`Restored snapshot: ${snapshot.name}`);
+
+      const refreshedSnapshots = await listArchitectureSnapshots(projectId);
+      setSnapshots(refreshedSnapshots);
+    } catch (error) {
+      console.error("Error restoring snapshot:", error);
+      setSnapshotError(
+        getFirestoreErrorCode(error) === "permission-denied"
+          ? "Permission denied. The snapshot could not be restored."
+          : "Could not restore this snapshot. Your current canvas was not intentionally changed.",
+      );
+    } finally {
+      setRestoringSnapshotId(null);
     }
   };
 
@@ -1035,7 +1100,16 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                       {snapshot.message && <p className="text-sm text-slate-400 mt-1">{snapshot.message}</p>}
                       <p className="text-xs text-slate-500 mt-2">Snapshot ID: {snapshot.id}</p>
                     </div>
-                    <span className="shrink-0 rounded-md bg-cyan-950/60 text-cyan-200 px-2 py-1 text-xs">Immutable</span>
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      <span className="rounded-md bg-cyan-950/60 text-cyan-200 px-2 py-1 text-xs">Immutable</span>
+                      <button
+                        onClick={() => void handleRestoreSnapshot(snapshot)}
+                        disabled={restoringSnapshotId !== null || snapshotSaving}
+                        className="rounded-lg border border-amber-700/60 bg-amber-950/40 px-3 py-1.5 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-900/50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {restoringSnapshotId === snapshot.id ? "Restoring..." : "Restore"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
