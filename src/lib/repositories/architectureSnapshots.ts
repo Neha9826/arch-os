@@ -5,6 +5,9 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  updateDoc,
+  deleteDoc,
+  doc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { ArchitectureIR } from "@/domain/architecture/types";
@@ -83,4 +86,31 @@ export async function listArchitectureSnapshots(
       createdAt: data.createdAt,
     };
   });
+}
+
+
+export async function updateArchitectureSnapshot(
+  architectureId: string,
+  snapshotId: string,
+  input: { name: string; message?: string },
+): Promise<void> {
+  const name = input.name.trim();
+  if (!name) throw new Error("Snapshot name is required.");
+
+  await updateDoc(
+    doc(db, "architectures", architectureId, SNAPSHOTS_SUBCOLLECTION, snapshotId),
+    {
+      name,
+      message: input.message?.trim() || "",
+    },
+  );
+}
+
+export async function deleteArchitectureSnapshot(
+  architectureId: string,
+  snapshotId: string,
+): Promise<void> {
+  await deleteDoc(
+    doc(db, "architectures", architectureId, SNAPSHOTS_SUBCOLLECTION, snapshotId),
+  );
 }
