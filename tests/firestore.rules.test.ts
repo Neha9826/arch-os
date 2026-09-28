@@ -289,6 +289,8 @@ describe("Architecture snapshot security rules", () => {
     name: "Before refactor",
     architectureIR: { schemaVersion: 1, components: [], relations: [] },
     canvasLayout: { nodes: [], edges: [] },
+    message: "",
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
   };
 
   test("owner can create a snapshot for their architecture", async () => {
@@ -314,7 +316,7 @@ describe("Architecture snapshot security rules", () => {
     );
   });
 
-  test("snapshots cannot be updated or deleted", async () => {
+  test("owner can edit snapshot metadata but cannot change its saved contents", async () => {
     await seedArchitecture();
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(
@@ -323,13 +325,44 @@ describe("Architecture snapshot security rules", () => {
       );
     });
     const db = authenticatedDb(userA);
+    const snapshotRef = doc(db, "architectures", architectureA, "snapshots", "snapshot-a");
+    await assertSucceeds(
+      updateDoc(snapshotRef, { name: "Renamed snapshot", message: "Updated note" }),
+    );
     await assertFails(
-      updateDoc(doc(db, "architectures", architectureA, "snapshots", "snapshot-a"), {
-        name: "Mutated snapshot",
+      updateDoc(snapshotRef, {
+        name: "Tampered snapshot",
+        message: "Changed content",
+        architectureIR: { schemaVersion: 1, components: [], relations: [{ id: "forged" }] },
       }),
     );
-    await assertFails(
+  });
+
+  test("owner can delete a snapshot", async () => {
+    await seedArchitecture();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "architectures", architectureA, "snapshots", "snapshot-a"),
+        snapshotData,
+      );
+    });
+    const db = authenticatedDb(userA);
+    await assertSucceeds(
       deleteDoc(doc(db, "architectures", architectureA, "snapshots", "snapshot-a")),
     );
+  });
+
+  test("another user cannot edit or delete a snapshot", async () => {
+    await seedArchitecture();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "architectures", architectureA, "snapshots", "snapshot-a"),
+        snapshotData,
+      );
+    });
+    const db = authenticatedDb(userB);
+    const snapshotRef = doc(db, "architectures", architectureA, "snapshots", "snapshot-a");
+    await assertFails(updateDoc(snapshotRef, { name: "Unauthorized", message: "" }));
+    await assertFails(deleteDoc(snapshotRef));
   });
 });
