@@ -22,6 +22,7 @@ import {
   reactFlowToArchitectureIR,
 } from "@/domain/architecture/reactFlowAdapter";
 import { lintArchitecture, type ArchitectureLintResult } from "@/domain/architecture/lint";
+import { diffArchitectures } from "@/domain/architecture/diff";
 
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -53,6 +54,7 @@ import {
   History,
   Camera,
   Eye,
+  GitCompareArrows,
 } from "lucide-react";
 
 const nodeTypes = {
@@ -121,6 +123,8 @@ function StudioEditor() {
   const [editingSnapshotName, setEditingSnapshotName] = useState("");
   const [editingSnapshotMessage, setEditingSnapshotMessage] = useState("");
   const [snapshotActionId, setSnapshotActionId] = useState<string | null>(null);
+  const [compareBeforeId, setCompareBeforeId] = useState("");
+  const [compareAfterId, setCompareAfterId] = useState("");
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [lintResult, setLintResult] = useState<ArchitectureLintResult | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -471,6 +475,8 @@ function StudioEditor() {
     try {
       const items = await listArchitectureSnapshots(projectId);
       setSnapshots(items);
+      setCompareBeforeId((current) => items.some((item) => item.id === current) ? current : (items[1]?.id ?? items[0]?.id ?? ""));
+      setCompareAfterId((current) => items.some((item) => item.id === current) ? current : (items[0]?.id ?? ""));
     } catch (error) {
       console.error("Error loading snapshots:", error);
       setSnapshotError("Could not load snapshots. Check your connection and try again.");
@@ -1162,6 +1168,94 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                 </button>
               </div>
             </div>
+
+            {snapshots.length >= 2 && (
+              <div className="mb-5 rounded-xl border border-violet-900/50 bg-violet-950/20 p-4">
+                <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-100">
+                  <GitCompareArrows size={16} className="text-violet-300" /> Compare snapshots
+                </h4>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="block text-xs text-slate-400">
+                    Base version
+                    <select value={compareBeforeId} onChange={(event) => setCompareBeforeId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100">
+                      {snapshots.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-xs text-slate-400">
+                    Compare with
+                    <select value={compareAfterId} onChange={(event) => setCompareAfterId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100">
+                      {snapshots.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                    </select>
+                  </label>
+                </div>
+                {(() => {
+                  const before = snapshots.find((item) => item.id === compareBeforeId);
+                  const after = snapshots.find((item) => item.id === compareAfterId);
+                  if (!before || !after) return <p className="mt-3 text-sm text-slate-400">Choose two snapshots to compare.</p>;
+                  if (before.id === after.id) return <p className="mt-3 text-sm text-amber-200">Choose two different snapshots.</p>;
+                  const diff = diffArchitectures(before.architectureIR, after.architectureIR);
+                  const total = diff.components.length + diff.relations.length;
+                  const renderChanges = (title: string, changes: typeof diff.components, noun: string) => (
+                    <div className="mt-4">
+                      <h5 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</h5>
+                      {changes.length === 0 ? (
+                        <p className="text-sm text-slate-500">No {noun} changes.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {changes.map((change) => {
+                            const item = change.after ?? change.before;
+                            const statusStyle = change.status === "added"
+                              ? "border-emerald-900/60 bg-emerald-950/30 text-emerald-200"
+                              : change.status === "removed"
+                                ? "border-red-900/60 bg-red-950/30 text-red-200"
+                                : "border-amber-900/60 bg-amber-950/30 text-amber-200";
+                            return (
+                              <div key={change.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+                                <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${statusStyle}`}>{change.status}</span>
+                                <span className="text-sm text-slate-100">{item?.name ?? change.id}</span>
+                                {change.changedFields.length > 0 && <span className="text-xs text-slate-400">Changed: {change.changedFields.join(", ")}</span>}
+                                {change.status === "modified" && change.before && change.after && (
+                                  <span className="basis-full text-xs text-slate-400">
+                                    {change.changedFields.map((field) => `${field}: ${String((change.before as unknown as Record<string, unknown>)[field] ?? "—")} → ${String((change.after as unknown as Record<string, unknown>)[field] ?? "—")}`).join(" · ")}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                  return (
+                    <div className="mt-4 border-t border-slate-800 pt-3">
+                      <p className="text-xs text-slate-400">Comparing <span className="text-slate-200">{before.name}</span> → <span className="text-slate-200">{after.name}</span></p>
+                      <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
+                        {[
+                          ["Components +", diff.summary.componentsAdded],
+                          ["Components −", diff.summary.componentsRemoved],
+                          ["Components ~", diff.summary.componentsModified],
+                          ["Relations +", diff.summary.relationsAdded],
+                          ["Relations −", diff.summary.relationsRemoved],
+                          ["Relations ~", diff.summary.relationsModified],
+                        ].map(([label, count]) => (
+                          <div key={label} className="rounded-lg bg-slate-900 p-2 text-center">
+                            <p className="text-lg font-semibold text-slate-100">{count}</p>
+                            <p className="text-[10px] text-slate-400">{label}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {total === 0 ? <p className="mt-4 text-sm text-emerald-200">No semantic architecture changes between these snapshots.</p> : (
+                        <>
+                          {renderChanges("Component changes", diff.components, "component")}
+                          {renderChanges("Connection changes", diff.relations as typeof diff.components, "connection")}
+                        </>
+                      )}
+                      <p className="mt-3 text-xs text-slate-500">This comparison covers architecture components and connections. Canvas position and styling changes are excluded.</p>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
 
             <div className="space-y-3">
               <h4 className="text-sm font-semibold text-slate-200">Saved snapshots</h4>
