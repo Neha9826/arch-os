@@ -50,26 +50,38 @@ function compareById<T extends { id: string }>(
   const afterById = new Map(afterItems.map((item) => [item.id, item]));
   const ids = [...new Set([...beforeById.keys(), ...afterById.keys()])].sort();
 
-  return ids.flatMap((id) => {
+  const result: Array<{
+    status: ArchitectureDiffStatus;
+    id: string;
+    before?: T;
+    after?: T;
+    changedFields: string[];
+  }> = [];
+
+  for (const id of ids) {
     const before = beforeById.get(id);
     const after = afterById.get(id);
 
     if (!before && after) {
-      return [{ status: "added" as const, id, after, changedFields: [] }];
+      result.push({ status: "added", id, after, changedFields: [] });
+      continue;
     }
     if (before && !after) {
-      return [{ status: "removed" as const, id, before, changedFields: [] }];
+      result.push({ status: "removed", id, before, changedFields: [] });
+      continue;
     }
-    if (!before || !after) return [];
+    if (!before || !after) continue;
 
     const changedFields = fields
       .filter((field) => before[field] !== after[field])
       .map(String);
 
-    return changedFields.length
-      ? [{ status: "modified" as const, id, before, after, changedFields }]
-      : [];
-  });
+    if (changedFields.length > 0) {
+      result.push({ status: "modified", id, before, after, changedFields });
+    }
+  }
+
+  return result;
 }
 
 /**
