@@ -105,3 +105,16 @@ export function diffArchitectures(
     },
   };
 }
+
+
+/** Returns a readable connection description using component names, not internal IDs. */
+export function formatRelationDescription(
+  relation: ArchitectureRelation,
+  architecture: ArchitectureIR,
+): string {
+  const componentName = (id: string) =>
+    architecture.components.find((component) => component.id === id)?.name ?? id;
+  const label = relation.label?.trim();
+  const detail = label || relation.kind;
+  return `${componentName(relation.source)} → ${componentName(relation.target)} (${detail})`;
+}
