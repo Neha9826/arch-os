@@ -1195,7 +1195,17 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                   if (before.id === after.id) return <p className="mt-3 text-sm text-amber-200">Choose two different snapshots.</p>;
                   const diff = diffArchitectures(before.architectureIR, after.architectureIR);
                   const total = diff.components.length + diff.relations.length;
-                  const renderChanges = (title: string, changes: typeof diff.components, noun: string) => (
+                  const renderChanges = (
+                    title: string,
+                    changes: Array<{
+                      status: "added" | "removed" | "modified";
+                      id: string;
+                      before?: ArchitectureSnapshot["architectureIR"]["components"][number] | ArchitectureSnapshot["architectureIR"]["relations"][number];
+                      after?: ArchitectureSnapshot["architectureIR"]["components"][number] | ArchitectureSnapshot["architectureIR"]["relations"][number];
+                      changedFields: string[];
+                    }>,
+                    noun: string,
+                  ) => (
                     <div className="mt-4">
                       <h5 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</h5>
                       {changes.length === 0 ? (
@@ -1204,6 +1214,7 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                         <div className="space-y-2">
                           {changes.map((change) => {
                             const item = change.after ?? change.before;
+                            const displayName = item && "name" in item ? item.name : change.id;
                             const statusStyle = change.status === "added"
                               ? "border-emerald-900/60 bg-emerald-950/30 text-emerald-200"
                               : change.status === "removed"
@@ -1212,7 +1223,7 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                             return (
                               <div key={change.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 p-3">
                                 <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${statusStyle}`}>{change.status}</span>
-                                <span className="text-sm text-slate-100">{item?.name ?? change.id}</span>
+                                <span className="text-sm text-slate-100">{displayName}</span>
                                 {change.changedFields.length > 0 && <span className="text-xs text-slate-400">Changed: {change.changedFields.join(", ")}</span>}
                                 {change.status === "modified" && change.before && change.after && (
                                   <span className="basis-full text-xs text-slate-400">
@@ -1247,7 +1258,7 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                       {total === 0 ? <p className="mt-4 text-sm text-emerald-200">No semantic architecture changes between these snapshots.</p> : (
                         <>
                           {renderChanges("Component changes", diff.components, "component")}
-                          {renderChanges("Connection changes", diff.relations as typeof diff.components, "connection")}
+                          {renderChanges("Connection changes", diff.relations, "connection")}
                         </>
                       )}
                       <p className="mt-3 text-xs text-slate-500">This comparison covers architecture components and connections. Canvas position and styling changes are excluded.</p>
