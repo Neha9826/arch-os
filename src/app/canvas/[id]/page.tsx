@@ -22,7 +22,7 @@ import {
   reactFlowToArchitectureIR,
 } from "@/domain/architecture/reactFlowAdapter";
 import { lintArchitecture, type ArchitectureLintResult } from "@/domain/architecture/lint";
-import { diffArchitectures } from "@/domain/architecture/diff";
+import { diffArchitectures, formatRelationDescription } from "@/domain/architecture/diff";
 
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -1214,7 +1214,15 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                         <div className="space-y-2">
                           {changes.map((change) => {
                             const item = change.after ?? change.before;
-                            const displayName = item && "name" in item ? item.name : change.id;
+                            const isRelation = item !== undefined && "source" in item;
+                            const displayName = isRelation
+                              ? change.status === "modified" && change.before && change.after && "source" in change.before && "source" in change.after
+                                ? `${formatRelationDescription(change.before, before.architectureIR)} → ${formatRelationDescription(change.after, after.architectureIR)}`
+                                : formatRelationDescription(
+                                    item as ArchitectureSnapshot["architectureIR"]["relations"][number],
+                                    change.status === "removed" ? before.architectureIR : after.architectureIR,
+                                  )
+                              : item && "name" in item ? item.name : change.id;
                             const statusStyle = change.status === "added"
                               ? "border-emerald-900/60 bg-emerald-950/30 text-emerald-200"
                               : change.status === "removed"
@@ -1227,7 +1235,17 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                                 {change.changedFields.length > 0 && <span className="text-xs text-slate-400">Changed: {change.changedFields.join(", ")}</span>}
                                 {change.status === "modified" && change.before && change.after && (
                                   <span className="basis-full text-xs text-slate-400">
-                                    {change.changedFields.map((field) => `${field}: ${String((change.before as unknown as Record<string, unknown>)[field] ?? "—")} → ${String((change.after as unknown as Record<string, unknown>)[field] ?? "—")}`).join(" · ")}
+                                    {change.changedFields.map((field) => {
+                                      const oldValue = (change.before as unknown as Record<string, unknown>)[field];
+                                      const newValue = (change.after as unknown as Record<string, unknown>)[field];
+                                      const formatValue = (value: unknown, architecture: ArchitectureSnapshot["architectureIR"]) => {
+                                        if (isRelation && (field === "source" || field === "target") && typeof value === "string") {
+                                          return architecture.components.find((component) => component.id === value)?.name ?? value;
+                                        }
+                                        return String(value ?? "—");
+                                      };
+                                      return `${field}: ${formatValue(oldValue, before.architectureIR)} → ${formatValue(newValue, after.architectureIR)}`;
+                                    }).join(" · ")}
                                   </span>
                                 )}
                               </div>
