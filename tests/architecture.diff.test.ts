@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { diffArchitectures } from "@/domain/architecture/diff";
+import { diffArchitectures, formatRelationDescription } from "@/domain/architecture/diff";
 import type { ArchitectureIR } from "@/domain/architecture/types";
 
 const before: ArchitectureIR = {
@@ -51,6 +51,21 @@ describe("Architecture diff", () => {
     expect(diff.summary.relationsAdded).toBe(1);
     expect(diff.summary.relationsRemoved).toBe(1);
     expect(diff.summary.relationsModified).toBe(1);
+  });
+
+  test("formats connections with readable component names and labels", () => {
+    expect(formatRelationDescription(before.relations[0], before)).toBe("API → Database (REST)");
+  });
+
+  test("falls back to component IDs when a connection endpoint is missing", () => {
+    const architecture: ArchitectureIR = {
+      schemaVersion: 1,
+      components: [],
+      relations: [{ id: "orphan", source: "missing-a", target: "missing-b", kind: "depends-on" }],
+    };
+    expect(formatRelationDescription(architecture.relations[0], architecture)).toBe(
+      "missing-a → missing-b (depends-on)",
+    );
   });
 
   test("ignores canvas-only metadata because it compares Architecture IR", () => {
