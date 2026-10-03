@@ -42,6 +42,7 @@ import {
 import {
   createArchitectureBranch,
   listArchitectureBranches,
+  updateArchitectureBranch,
 } from "@/lib/repositories/architectureBranches";
 import type { ArchitectureBranch } from "@/domain/architecture/branches";
 import { useParams, useRouter } from "next/navigation";
@@ -341,6 +342,45 @@ function StudioEditor() {
         } else {
           router.replace(`/canvas/${architectureId}`);
         }
+      } else if (selectedBranchId) {
+        const activeBranch = branches.find((item) => item.id === selectedBranchId);
+
+        if (!activeBranch) {
+          throw new Error("The selected branch is no longer available.");
+        }
+
+        if (activeBranch.status !== "active") {
+          setSaveError(`This branch is ${activeBranch.status} and cannot be edited.`);
+          return;
+        }
+
+        await updateArchitectureBranch({
+          architectureId: projectId,
+          branchId: selectedBranchId,
+          name: activeBranch.name,
+          description: activeBranch.description,
+          status: activeBranch.status,
+          architectureIR,
+          canvasLayout: persistenceState,
+        });
+
+        setBranches((current) =>
+          current.map((item) =>
+            item.id === selectedBranchId
+              ? {
+                  ...item,
+                  architectureIR,
+                  canvasLayout: persistenceState,
+                }
+              : item,
+          ),
+        );
+        setHasUnsavedChanges(false);
+        setSaveNotice(`Branch saved: ${activeBranch.name}`);
+
+        if (andExit) {
+          router.push("/");
+        }
       } else {
         await updateArchitecture({
           id: projectId,
@@ -382,6 +422,82 @@ function StudioEditor() {
       setShowExitModal(true);
     } else {
       router.push("/");
+    }
+  };
+
+  const handleBranchSelectionChange = async (branchId: string) => {
+    if (branchId === selectedBranchId) return;
+
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm(
+        "You have unsaved changes. Switching architecture branches will discard them. Continue?",
+      );
+      if (!confirmed) return;
+    }
+
+    setSaveError(null);
+    setSaveNotice(null);
+    setSelectedSnapshot(null);
+    setBranchSourceSnapshot(null);
+    isLoadingData.current = true;
+
+    try {
+      if (!branchId) {
+        const architecture = await getArchitecture(projectId);
+        if (!architecture || !user || architecture.ownerId !== user.uid) {
+          throw new Error("Architecture not found or access denied.");
+        }
+
+        const canvasLayout = architecture.canvasLayout ?? {
+          nodes: architecture.nodes,
+          edges: architecture.edges,
+        };
+        const architectureIR = architecture.architectureIR ??
+          reactFlowToArchitectureIR(canvasLayout);
+        const reactFlowState = architectureIRToReactFlow(
+          architectureIR,
+          canvasLayout,
+        );
+
+        setNodes(reactFlowState.nodes);
+        setEdges(reactFlowState.edges);
+        setWorkspaceId(architecture.workspaceId);
+        setProjectTitle(architecture.name);
+        setInputTitle(architecture.name);
+        setSelectedBranchId("");
+        setHasUnsavedChanges(false);
+        setSaveNotice("Switched to main architecture.");
+        return;
+      }
+
+      const branchToLoad = branches.find((item) => item.id === branchId);
+      if (!branchToLoad) {
+        throw new Error("The selected branch could not be found.");
+      }
+
+      const reactFlowState = architectureIRToReactFlow(
+        branchToLoad.architectureIR,
+        branchToLoad.canvasLayout,
+      );
+
+      setNodes(reactFlowState.nodes);
+      setEdges(reactFlowState.edges);
+      setSelectedBranchId(branchId);
+      setHasUnsavedChanges(false);
+      setSaveNotice(`Switched to branch: ${branchToLoad.name}`);
+    } catch (error) {
+      console.error("Error switching branch:", error);
+      setSaveError(
+        getFirestoreErrorCode(error) === "permission-denied"
+          ? "Permission denied. This branch could not be loaded."
+          : error instanceof Error
+            ? error.message
+            : "Could not switch branches. Please try again.",
+      );
+    } finally {
+      setTimeout(() => {
+        isLoadingData.current = false;
+      }, 0);
     }
   };
 
@@ -935,6 +1051,15 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
           <h1 className="text-white font-semibold text-lg tracking-wide flex items-center gap-2">
             {projectTitle}
 
+            {selectedBranchId && (() => {
+              const activeBranch = branches.find((item) => item.id === selectedBranchId);
+              return activeBranch ? (
+                <span className="rounded-md border border-violet-800/60 bg-violet-950/50 px-2 py-1 text-xs font-medium text-violet-200">
+                  Branch: {activeBranch.name}
+                </span>
+              ) : null;
+            })()}
+
             {hasUnsavedChanges && (
               <span
                 className="w-2 h-2 rounded-full bg-amber-500"
@@ -1220,6 +1345,11 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
               <h4 className="text-sm font-semibold text-slate-100 mb-3 flex items-center gap-2">
                 <Camera size={16} className="text-cyan-300" /> Create immutable snapshot
               </h4>
+              {selectedBranchId && (
+                <p className="mb-3 rounded-lg border border-violet-900/50 bg-violet-950/20 px-3 py-2 text-xs text-violet-200">
+                  Snapshot creation and restore operate on the main architecture. Switch to Main architecture to use them.
+                </p>
+              )}
               <label className="block text-xs text-slate-400 mb-1">Snapshot name</label>
               <input
                 value={snapshotName}
@@ -1241,7 +1371,7 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
               <div className="flex justify-end">
                 <button
                   onClick={() => void handleCreateSnapshot()}
-                  disabled={snapshotSaving || !snapshotName.trim()}
+                  disabled={selectedBranchId !== "" || snapshotSaving || !snapshotName.trim()}
                   className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                 >
                   {snapshotSaving ? "Creating..." : "Create Snapshot"}
@@ -1389,7 +1519,7 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                     Branch switcher
                     <select
                       value={selectedBranchId}
-                      onChange={(event) => setSelectedBranchId(event.target.value)}
+                      onChange={(event) => void handleBranchSelectionChange(event.target.value)}
                       className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-violet-500 focus:outline-none"
                     >
                       <option value="">Main architecture</option>
@@ -1420,7 +1550,7 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                           </span>
                         </div>
                         <p className="mt-2 text-[11px] text-slate-500">
-                          Branch state is preserved independently. Canvas switching/editing is wired in the next branch-aware canvas milestone.
+                          Changes are saved only to this branch. The main architecture remains unchanged.
                         </p>
                       </div>
                     );
@@ -1458,7 +1588,7 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                       <div className="flex shrink-0 flex-col items-end gap-2">
                         <span className="rounded-md bg-cyan-950/60 px-2 py-1 text-xs text-cyan-200">Saved version</span>
                         <button onClick={() => { setSelectedSnapshot(snapshot); setSnapshotError(null); }} className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700"><Eye size={14} /> Preview</button>
-                        <button onClick={() => void handleRestoreSnapshot(snapshot)} disabled={restoringSnapshotId !== null || snapshotSaving || snapshotActionId !== null} className="rounded-lg border border-amber-700/60 bg-amber-950/40 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-900/50 disabled:cursor-not-allowed disabled:opacity-50">{restoringSnapshotId === snapshot.id ? "Restoring..." : "Restore"}</button>
+                        <button onClick={() => void handleRestoreSnapshot(snapshot)} disabled={selectedBranchId !== "" || restoringSnapshotId !== null || snapshotSaving || snapshotActionId !== null} className="rounded-lg border border-amber-700/60 bg-amber-950/40 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-900/50 disabled:cursor-not-allowed disabled:opacity-50">{restoringSnapshotId === snapshot.id ? "Restoring..." : "Restore"}</button>
                         <button
                           onClick={() => {
                             setBranchSourceSnapshot(snapshot);
@@ -1612,7 +1742,7 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
               </button>
               <button
                 onClick={() => void handleRestoreSnapshot(selectedSnapshot)}
-                disabled={restoringSnapshotId !== null || snapshotSaving}
+                disabled={selectedBranchId !== "" || restoringSnapshotId !== null || snapshotSaving}
                 className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {restoringSnapshotId === selectedSnapshot.id ? "Restoring..." : "Restore this version"}
