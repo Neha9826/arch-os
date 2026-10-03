@@ -423,7 +423,9 @@ describe("Architecture branch security rules", () => {
     await assertFails(deleteDoc(branchRef));
   });
 
-}describe("Architecture snapshot security rules", () => {
+});
+
+describe("Architecture snapshot security rules", () => {
   async function seedArchitecture() {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), "workspaces", workspaceA), {
