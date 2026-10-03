@@ -39,6 +39,7 @@ import {
   deleteArchitectureSnapshot,
   type ArchitectureSnapshot,
 } from "@/lib/repositories/architectureSnapshots";
+import { createArchitectureBranch } from "@/lib/repositories/architectureBranches";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -126,6 +127,10 @@ function StudioEditor() {
   const [compareBeforeId, setCompareBeforeId] = useState("");
   const [compareAfterId, setCompareAfterId] = useState("");
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const [branchSourceSnapshot, setBranchSourceSnapshot] = useState<ArchitectureSnapshot | null>(null);
+  const [branchName, setBranchName] = useState("");
+  const [branchDescription, setBranchDescription] = useState("");
+  const [branchCreating, setBranchCreating] = useState(false);
   const [lintResult, setLintResult] = useState<ArchitectureLintResult | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
@@ -544,6 +549,52 @@ function StudioEditor() {
       );
     } finally {
       setSnapshotSaving(false);
+    }
+  };
+
+  const handleCreateBranch = async () => {
+    if (!user || isNewProject || !branchSourceSnapshot || branchCreating) return;
+
+    const name = branchName.trim();
+    if (!name) {
+      setSnapshotError("Enter a name for this branch.");
+      return;
+    }
+
+    setBranchCreating(true);
+    setSnapshotError(null);
+
+    try {
+      const workspace = await ensurePersonalWorkspace(user.uid);
+      const resolvedWorkspaceId = workspaceId || workspace.id;
+
+      const sourceSnapshot = branchSourceSnapshot;
+
+      await createArchitectureBranch({
+        architectureId: projectId,
+        workspaceId: resolvedWorkspaceId,
+        ownerId: user.uid,
+        createdBy: user.uid,
+        name,
+        description: branchDescription,
+        baseSnapshotId: sourceSnapshot.id,
+        architectureIR: sourceSnapshot.architectureIR,
+        canvasLayout: sourceSnapshot.canvasLayout,
+      });
+
+      setBranchSourceSnapshot(null);
+      setBranchName("");
+      setBranchDescription("");
+      setSaveNotice("Branch created successfully.");
+    } catch (error) {
+      console.error("Error creating branch:", error);
+      setSnapshotError(
+        getFirestoreErrorCode(error) === "permission-denied"
+          ? "Permission denied. Save the architecture and confirm you own its workspace."
+          : "Could not create this branch. Please try again.",
+      );
+    } finally {
+      setBranchCreating(false);
     }
   };
 
@@ -1316,6 +1367,18 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                         <span className="rounded-md bg-cyan-950/60 px-2 py-1 text-xs text-cyan-200">Saved version</span>
                         <button onClick={() => { setSelectedSnapshot(snapshot); setSnapshotError(null); }} className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700"><Eye size={14} /> Preview</button>
                         <button onClick={() => void handleRestoreSnapshot(snapshot)} disabled={restoringSnapshotId !== null || snapshotSaving || snapshotActionId !== null} className="rounded-lg border border-amber-700/60 bg-amber-950/40 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-900/50 disabled:cursor-not-allowed disabled:opacity-50">{restoringSnapshotId === snapshot.id ? "Restoring..." : "Restore"}</button>
+                        <button
+                          onClick={() => {
+                            setBranchSourceSnapshot(snapshot);
+                            setBranchName(snapshot.name + " branch");
+                            setBranchDescription("");
+                            setSnapshotError(null);
+                          }}
+                          disabled={snapshotActionId !== null || restoringSnapshotId !== null}
+                          className="rounded-lg border border-violet-700/60 bg-violet-950/30 px-3 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-900/50 disabled:opacity-50"
+                        >
+                          Create Branch
+                        </button>
                         <button onClick={() => { setEditingSnapshotId(snapshot.id); setEditingSnapshotName(snapshot.name); setEditingSnapshotMessage(snapshot.message ?? ""); setSnapshotError(null); }} disabled={snapshotActionId !== null} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50">Edit</button>
                         <button onClick={() => void handleDeleteSnapshot(snapshot)} disabled={snapshotActionId !== null || restoringSnapshotId !== null} className="rounded-lg border border-red-900/70 px-3 py-1.5 text-xs text-red-300 hover:bg-red-950/50 disabled:opacity-50">{snapshotActionId === snapshot.id ? "Working..." : "Delete"}</button>
                       </div>
@@ -1327,6 +1390,72 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
 
             <div className="flex justify-end mt-5">
               <button onClick={() => setShowSnapshotsModal(false)} className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {branchSourceSnapshot && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-violet-900/60 bg-slate-900 p-6 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-100">Create Architecture Branch</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  Starting from <span className="text-violet-200">{branchSourceSnapshot.name}</span>.
+                </p>
+              </div>
+              <button
+                onClick={() => setBranchSourceSnapshot(null)}
+                className="text-slate-500 hover:text-slate-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-4 rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-400">
+              The branch starts exactly from this saved snapshot. Your current architecture and canvas will not be changed.
+            </div>
+
+            <label className="mb-1 block text-xs text-slate-400">Branch name</label>
+            <input
+              value={branchName}
+              onChange={(event) => setBranchName(event.target.value)}
+              maxLength={100}
+              autoFocus
+              placeholder="e.g. add-caching"
+              className="mb-4 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-violet-500 focus:outline-none"
+            />
+
+            <label className="mb-1 block text-xs text-slate-400">Description (optional)</label>
+            <textarea
+              value={branchDescription}
+              onChange={(event) => setBranchDescription(event.target.value)}
+              maxLength={500}
+              rows={3}
+              placeholder="What are you exploring on this branch?"
+              className="mb-4 w-full resize-y rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-violet-500 focus:outline-none"
+            />
+
+            {snapshotError && (
+              <p className="mb-4 text-sm text-red-300">{snapshotError}</p>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setBranchSourceSnapshot(null)}
+                disabled={branchCreating}
+                className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleCreateBranch()}
+                disabled={branchCreating || !branchName.trim()}
+                className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
+              >
+                {branchCreating ? "Creating..." : "Create Branch"}
+              </button>
             </div>
           </div>
         </div>
