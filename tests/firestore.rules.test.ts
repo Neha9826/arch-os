@@ -273,8 +273,40 @@ describe("Architecture branch security rules", () => {
     });
   }
 
+  const branchSnapshotData = {
+    architectureId: architectureA,
+    workspaceId: workspaceA,
+    ownerId: userA.uid,
+    createdBy: userA.uid,
+    name: "Branch base",
+    architectureIR: { schemaVersion: 1, components: [], relations: [] },
+    canvasLayout: { nodes: [], edges: [] },
+    message: "",
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  };
+
+  async function seedBranchSnapshot() {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "workspaces", workspaceA), {
+        ownerId: userA.uid,
+        name: "User A Workspace",
+      });
+      await setDoc(doc(context.firestore(), "architectures", architectureA), {
+        ownerId: userA.uid,
+        workspaceId: workspaceA,
+        name: "Architecture A",
+        nodes: [],
+        edges: [],
+      });
+      await setDoc(
+        doc(context.firestore(), "architectures", architectureA, "snapshots", "snapshot-a"),
+        branchSnapshotData,
+      );
+    });
+  }
+
   test("owner can create a branch from their snapshot", async () => {
-    await seedArchitecture();
+    await seedBranchSnapshot();
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(
         doc(context.firestore(), "architectures", architectureA, "snapshots", "snapshot-a"),
@@ -318,7 +350,7 @@ describe("Architecture branch security rules", () => {
       await setDoc(
         doc(context.firestore(), "architectures", "architecture-b", "snapshots", "snapshot-b"),
         {
-          ...snapshotData,
+          ...branchSnapshotData,
           architectureId: "architecture-b",
           workspaceId: workspaceB,
           ownerId: userB.uid,
@@ -347,7 +379,7 @@ describe("Architecture branch security rules", () => {
   });
 
   test("branch owner can update working state but cannot change its base", async () => {
-    await seedArchitecture();
+    await seedBranchSnapshot();
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(
         doc(context.firestore(), "architectures", architectureA, "snapshots", "snapshot-a"),
@@ -390,7 +422,7 @@ describe("Architecture branch security rules", () => {
   });
 
   test("another user cannot read, update, or delete a branch", async () => {
-    await seedArchitecture();
+    await seedBranchSnapshot();
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(
         doc(context.firestore(), "architectures", architectureA, "branches", "branch-a"),
