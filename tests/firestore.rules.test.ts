@@ -269,7 +269,7 @@ describe("Architecture branch security rules", () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), "workspaces", workspaceA), { ownerId: userA.uid, name: "User A Workspace" });
       await setDoc(doc(context.firestore(), "architectures", architectureA), { ownerId: userA.uid, workspaceId: workspaceA, name: "Architecture A", nodes: [], edges: [] });
-      await setDoc(doc(context.firestore(), "architectures", architectureA, "snapshots", "snapshot-a"), snapshotData);
+      await setDoc(doc(context.firestore(), "architectures", architectureA, "snapshots", "snapshot-a"), branchSnapshotData);
     });
   }
 
@@ -310,7 +310,7 @@ describe("Architecture branch security rules", () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(
         doc(context.firestore(), "architectures", architectureA, "snapshots", "snapshot-a"),
-        snapshotData,
+        branchSnapshotData,
       );
     });
 
@@ -383,7 +383,7 @@ describe("Architecture branch security rules", () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(
         doc(context.firestore(), "architectures", architectureA, "snapshots", "snapshot-a"),
-        snapshotData,
+        branchSnapshotData,
       );
       await setDoc(
         doc(context.firestore(), "architectures", architectureA, "branches", "branch-a"),
