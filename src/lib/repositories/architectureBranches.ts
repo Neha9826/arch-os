@@ -20,14 +20,11 @@ import type {
   ArchitectureBranch,
   ArchitectureBranchStatus,
 } from "@/domain/architecture/branches";
-import type { Edge, Node } from "reactflow";
+import type { ReactFlowArchitectureState } from "@/domain/architecture/reactFlowAdapter";
 
 const BRANCHES_SUBCOLLECTION = "branches";
 
-type CanvasLayout = {
-  nodes: Array<Node<{ label: string }>>;
-  edges: Edge[];
-};
+type CanvasLayout = ReactFlowArchitectureState;
 
 function toFirestoreSafe<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
