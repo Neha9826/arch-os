@@ -135,7 +135,9 @@ service cloud.firestore {
           && request.resource.data.name.size() <= 100
           && request.resource.data.status == "active"
           && request.resource.data.architectureIR is map
-          && request.resource.data.canvasLayout is map;
+          && request.resource.data.canvasLayout is map
+          && request.resource.data.architectureIR == get(/databases/$(database)/documents/architectures/$(architectureId)/snapshots/$(request.resource.data.baseSnapshotId)).data.architectureIR
+          && request.resource.data.canvasLayout == get(/databases/$(database)/documents/architectures/$(architectureId)/snapshots/$(request.resource.data.baseSnapshotId)).data.canvasLayout;
 
         allow update: if isParentArchitectureOwner()
           && request.resource.data.architectureId == resource.data.architectureId
