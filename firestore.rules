@@ -104,6 +104,57 @@ service cloud.firestore {
 
         allow delete: if isParentArchitectureOwner();
       }
+
+      // Branches are mutable working copies created from a saved snapshot.
+      match /branches/{branchId} {
+        function isParentArchitectureOwner() {
+          return isSignedIn()
+            && exists(/databases/$(database)/documents/architectures/$(architectureId))
+            && get(/databases/$(database)/documents/architectures/$(architectureId)).data.ownerId == request.auth.uid;
+        }
+
+        function isValidStatus(status) {
+          return status == "active"
+            || status == "merged"
+            || status == "abandoned";
+        }
+
+        allow get, list: if isParentArchitectureOwner();
+
+        allow create: if isParentArchitectureOwner()
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.architectureId == architectureId
+          && request.resource.data.workspaceId == get(/databases/$(database)/documents/architectures/$(architectureId)).data.workspaceId
+          && request.resource.data.baseSnapshotId is string
+          && request.resource.data.baseSnapshotId.size() > 0
+          && exists(/databases/$(database)/documents/architectures/$(architectureId)/snapshots/$(request.resource.data.baseSnapshotId))
+          && get(/databases/$(database)/documents/architectures/$(architectureId)/snapshots/$(request.resource.data.baseSnapshotId)).data.ownerId == request.auth.uid
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 100
+          && request.resource.data.status == "active"
+          && request.resource.data.architectureIR is map
+          && request.resource.data.canvasLayout is map;
+
+        allow update: if isParentArchitectureOwner()
+          && request.resource.data.architectureId == resource.data.architectureId
+          && request.resource.data.workspaceId == resource.data.workspaceId
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.baseSnapshotId == resource.data.baseSnapshotId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 100
+          && request.resource.data.description is string
+          && request.resource.data.description.size() <= 500
+          && isValidStatus(request.resource.data.status)
+          && request.resource.data.architectureIR is map
+          && request.resource.data.canvasLayout is map;
+
+        allow delete: if isParentArchitectureOwner();
+      }
     }
   }
 }
