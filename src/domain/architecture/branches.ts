@@ -1,3 +1,5 @@
+import type { ReactFlowArchitectureState } from "./reactFlowAdapter";
+
 import type { ArchitectureIR } from "./types";
 
 export type ArchitectureBranchStatus = "active" | "merged" | "abandoned";
@@ -13,16 +15,7 @@ export type ArchitectureBranch = {
   baseSnapshotId: string;
   status: ArchitectureBranchStatus;
   architectureIR: ArchitectureIR;
-  canvasLayout: {
-    nodes: Array<{
-      id: string;
-      type?: string;
-      position: { x: number; y: number };
-      data: Record<string, unknown>;
-      [key: string]: unknown;
-    }>;
-    edges: Array<Record<string, unknown>>;
-  };
+  canvasLayout: ReactFlowArchitectureState;
   createdAt?: unknown;
   updatedAt?: unknown;
 };
