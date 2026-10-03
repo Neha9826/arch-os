@@ -39,7 +39,11 @@ import {
   deleteArchitectureSnapshot,
   type ArchitectureSnapshot,
 } from "@/lib/repositories/architectureSnapshots";
-import { createArchitectureBranch } from "@/lib/repositories/architectureBranches";
+import {
+  createArchitectureBranch,
+  listArchitectureBranches,
+  type ArchitectureBranch,
+} from "@/lib/repositories/architectureBranches";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -131,6 +135,9 @@ function StudioEditor() {
   const [branchName, setBranchName] = useState("");
   const [branchDescription, setBranchDescription] = useState("");
   const [branchCreating, setBranchCreating] = useState(false);
+  const [branches, setBranches] = useState<ArchitectureBranch[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [selectedBranchId, setSelectedBranchId] = useState("");
   const [lintResult, setLintResult] = useState<ArchitectureLintResult | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
@@ -467,6 +474,24 @@ function StudioEditor() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const loadBranches = async () => {
+    if (isNewProject) return;
+
+    setBranchesLoading(true);
+    try {
+      const items = await listArchitectureBranches(projectId);
+      setBranches(items);
+      setSelectedBranchId((current) =>
+        items.some((item) => item.id === current) ? current : "",
+      );
+    } catch (error) {
+      console.error("Error loading branches:", error);
+      setSnapshotError("Could not load branches. Check your connection and try again.");
+    } finally {
+      setBranchesLoading(false);
+    }
+  };
+
   const openSnapshots = async () => {
     if (isNewProject) {
       setSaveError("Save this architecture before creating a snapshot.");
@@ -478,7 +503,10 @@ function StudioEditor() {
     setSnapshotError(null);
 
     try {
-      const items = await listArchitectureSnapshots(projectId);
+      const [items] = await Promise.all([
+        listArchitectureSnapshots(projectId),
+        loadBranches(),
+      ]);
       setSnapshots(items);
       setCompareBeforeId((current) => items.some((item) => item.id === current) ? current : (items[1]?.id ?? items[0]?.id ?? ""));
       setCompareAfterId((current) => items.some((item) => item.id === current) ? current : (items[0]?.id ?? ""));
@@ -582,6 +610,7 @@ function StudioEditor() {
         canvasLayout: sourceSnapshot.canvasLayout,
       });
 
+      await loadBranches();
       setBranchSourceSnapshot(null);
       setBranchName("");
       setBranchDescription("");
@@ -1336,6 +1365,69 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                 })()}
               </div>
             )}
+
+            <div className="mb-5 rounded-xl border border-violet-900/50 bg-violet-950/20 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-100">Architecture branches</h4>
+                  <p className="mt-1 text-xs text-slate-400">Saved working lines created from architecture snapshots.</p>
+                </div>
+                <span className="rounded-md bg-violet-950/70 px-2 py-1 text-xs text-violet-200">
+                  {branches.length} {branches.length === 1 ? "branch" : "branches"}
+                </span>
+              </div>
+
+              {branchesLoading ? (
+                <p className="py-3 text-sm text-slate-400">Loading branches…</p>
+              ) : branches.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-slate-700 p-3 text-sm text-slate-400">
+                  No branches yet. Create one from a saved snapshot.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <label className="block text-xs text-slate-400">
+                    Branch switcher
+                    <select
+                      value={selectedBranchId}
+                      onChange={(event) => setSelectedBranchId(event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-violet-500 focus:outline-none"
+                    >
+                      <option value="">Main architecture</option>
+                      {branches.map((branch) => (
+                        <option key={branch.id} value={branch.id}>
+                          {branch.name} · {branch.status}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {selectedBranchId && (() => {
+                    const branch = branches.find((item) => item.id === selectedBranchId);
+                    if (!branch) return null;
+                    const baseSnapshot = snapshots.find((item) => item.id === branch.baseSnapshotId);
+                    return (
+                      <div className="rounded-lg border border-violet-900/50 bg-slate-950/60 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-medium text-slate-100">{branch.name}</p>
+                            {branch.description && <p className="mt-1 text-xs text-slate-400">{branch.description}</p>}
+                            <p className="mt-2 text-xs text-slate-500">
+                              Based on: <span className="text-slate-300">{baseSnapshot?.name ?? branch.baseSnapshotId}</span>
+                            </p>
+                          </div>
+                          <span className="rounded-md border border-violet-800/60 bg-violet-950/40 px-2 py-1 text-[11px] font-medium capitalize text-violet-200">
+                            {branch.status}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-[11px] text-slate-500">
+                          Branch state is preserved independently. Canvas switching/editing is wired in the next branch-aware canvas milestone.
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
 
             <div className="space-y-3">
               <h4 className="text-sm font-semibold text-slate-200">Saved snapshots</h4>
