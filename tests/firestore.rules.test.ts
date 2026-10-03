@@ -264,7 +264,166 @@ describe("Architecture security rules", () => {
   });
 });
 
-describe("Architecture snapshot security rules", () => {
+describe("Architecture branch security rules", () => {
+  async function seedBranchSnapshot() {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "workspaces", workspaceA), { ownerId: userA.uid, name: "User A Workspace" });
+      await setDoc(doc(context.firestore(), "architectures", architectureA), { ownerId: userA.uid, workspaceId: workspaceA, name: "Architecture A", nodes: [], edges: [] });
+      await setDoc(doc(context.firestore(), "architectures", architectureA, "snapshots", "snapshot-a"), snapshotData);
+    });
+  }
+
+  test("owner can create a branch from their snapshot", async () => {
+    await seedArchitecture();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "architectures", architectureA, "snapshots", "snapshot-a"),
+        snapshotData,
+      );
+    });
+
+    const db = authenticatedDb(userA);
+    await assertSucceeds(
+      setDoc(
+        doc(db, "architectures", architectureA, "branches", "branch-a"),
+        {
+          architectureId: architectureA,
+          workspaceId: workspaceA,
+          ownerId: userA.uid,
+          createdBy: userA.uid,
+          name: "feature/payments",
+          description: "Payment flow experiment",
+          baseSnapshotId: "snapshot-a",
+          status: "active",
+          architectureIR: { schemaVersion: 1, components: [], relations: [] },
+          canvasLayout: { nodes: [], edges: [] },
+        },
+      ),
+    );
+  });
+
+  test("user cannot create a branch from another user's architecture or snapshot", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "workspaces", workspaceB), {
+        ownerId: userB.uid,
+        name: "User B Workspace",
+      });
+      await setDoc(doc(context.firestore(), "architectures", "architecture-b"), {
+        ownerId: userB.uid,
+        workspaceId: workspaceB,
+        name: "Architecture B",
+        nodes: [],
+        edges: [],
+      });
+      await setDoc(
+        doc(context.firestore(), "architectures", "architecture-b", "snapshots", "snapshot-b"),
+        {
+          ...snapshotData,
+          architectureId: "architecture-b",
+          workspaceId: workspaceB,
+          ownerId: userB.uid,
+          createdBy: userB.uid,
+        },
+      );
+    });
+
+    const db = authenticatedDb(userA);
+    await assertFails(
+      setDoc(
+        doc(db, "architectures", "architecture-b", "branches", "branch-a"),
+        {
+          architectureId: "architecture-b",
+          workspaceId: workspaceB,
+          ownerId: userA.uid,
+          createdBy: userA.uid,
+          name: "forged",
+          baseSnapshotId: "snapshot-b",
+          status: "active",
+          architectureIR: { schemaVersion: 1, components: [], relations: [] },
+          canvasLayout: { nodes: [], edges: [] },
+        },
+      ),
+    );
+  });
+
+  test("branch owner can update working state but cannot change its base", async () => {
+    await seedArchitecture();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "architectures", architectureA, "snapshots", "snapshot-a"),
+        snapshotData,
+      );
+      await setDoc(
+        doc(context.firestore(), "architectures", architectureA, "branches", "branch-a"),
+        {
+          architectureId: architectureA,
+          workspaceId: workspaceA,
+          ownerId: userA.uid,
+          createdBy: userA.uid,
+          name: "feature/payments",
+          description: "",
+          baseSnapshotId: "snapshot-a",
+          status: "active",
+          architectureIR: { schemaVersion: 1, components: [], relations: [] },
+          canvasLayout: { nodes: [], edges: [] },
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      );
+    });
+
+    const db = authenticatedDb(userA);
+    const branchRef = doc(db, "architectures", architectureA, "branches", "branch-a");
+    await assertSucceeds(
+      updateDoc(branchRef, {
+        name: "feature/payments-v2",
+        description: "Updated",
+        status: "active",
+        architectureIR: { schemaVersion: 1, components: [], relations: [] },
+        canvasLayout: { nodes: [], edges: [] },
+      }),
+    );
+    await assertFails(
+      updateDoc(branchRef, {
+        baseSnapshotId: "another-snapshot",
+      }),
+    );
+  });
+
+  test("another user cannot read, update, or delete a branch", async () => {
+    await seedArchitecture();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "architectures", architectureA, "branches", "branch-a"),
+        {
+          architectureId: architectureA,
+          workspaceId: workspaceA,
+          ownerId: userA.uid,
+          createdBy: userA.uid,
+          name: "feature/payments",
+          description: "",
+          baseSnapshotId: "snapshot-a",
+          status: "active",
+          architectureIR: { schemaVersion: 1, components: [], relations: [] },
+          canvasLayout: { nodes: [], edges: [] },
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      );
+    });
+
+    const db = authenticatedDb(userB);
+    const branchRef = doc(db, "architectures", architectureA, "branches", "branch-a");
+    await assertFails(getDoc(branchRef));
+    await assertFails(updateDoc(branchRef, {
+      name: "forged",
+      description: "",
+      status: "active",
+      architectureIR: { schemaVersion: 1, components: [], relations: [] },
+      canvasLayout: { nodes: [], edges: [] },
+    }));
+    await assertFails(deleteDoc(branchRef));
+  });
+
+}describe("Architecture snapshot security rules", () => {
   async function seedArchitecture() {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), "workspaces", workspaceA), {
