@@ -42,8 +42,8 @@ import {
 import {
   createArchitectureBranch,
   listArchitectureBranches,
-  type ArchitectureBranch,
 } from "@/lib/repositories/architectureBranches";
+import type { ArchitectureBranch } from "@/domain/architecture/branches";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
