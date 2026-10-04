@@ -41,6 +41,7 @@ import {
 } from "@/lib/repositories/architectureSnapshots";
 import {
   createArchitectureBranch,
+  getArchitectureBranch,
   listArchitectureBranches,
   updateArchitectureBranch,
 } from "@/lib/repositories/architectureBranches";
@@ -453,11 +454,10 @@ function StudioEditor() {
     setSaveNotice(null);
 
     try {
-      const [{ getArchitectureBranch }, architecture] = await Promise.all([
-        import("@/lib/repositories/architectureBranches"),
+      const [latestBranch, architecture] = await Promise.all([
+        getArchitectureBranch(projectId, branch.id),
         getArchitecture(projectId),
       ]);
-      const latestBranch = await getArchitectureBranch(projectId, branch.id);
 
       if (!latestBranch || latestBranch.status !== "active") {
         throw new Error("This branch is no longer active.");
