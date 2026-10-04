@@ -50,6 +50,15 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.ownerId == resource.data.ownerId
         && (
+          request.resource.data.headCommitId == resource.data.headCommitId
+          || (
+            request.resource.data.headCommitId is string
+            && exists(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId))
+            && get(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.ownerId == request.auth.uid
+            && get(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.parentCommitId == resource.data.headCommitId
+          )
+        )
+        && (
           (
             hasWorkspace(resource.data)
             && request.resource.data.workspaceId == resource.data.workspaceId
@@ -126,6 +135,8 @@ service cloud.firestore {
           && request.resource.data.message.size() <= 200
           && request.resource.data.architectureIR is map
           && request.resource.data.canvasLayout is map
+          && request.resource.data.headCommitId == commitId
+          && getAfter(/databases/$(database)/documents/architectures/$(architectureId)).data.headCommitId == commitId
           && (
             !request.resource.data.keys().hasAll(['parentCommitId'])
             || (
