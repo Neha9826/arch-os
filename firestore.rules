@@ -56,6 +56,7 @@ service cloud.firestore {
             && exists(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId))
             && get(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.ownerId == request.auth.uid
             && get(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.parentCommitId == resource.data.headCommitId
+            && getAfter(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.createdAt == request.time
           )
         )
         && (
@@ -135,6 +136,7 @@ service cloud.firestore {
           && request.resource.data.message.size() <= 200
           && request.resource.data.architectureIR is map
           && request.resource.data.canvasLayout is map
+          && request.resource.data.createdAt == request.time
           && request.resource.data.headCommitId == commitId
           && getAfter(/databases/$(database)/documents/architectures/$(architectureId)).data.headCommitId == commitId
           && (
