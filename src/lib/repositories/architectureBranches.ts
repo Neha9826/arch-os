@@ -7,6 +7,7 @@ import {
   getDocs,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
@@ -21,6 +22,7 @@ import type {
   ArchitectureBranchStatus,
 } from "@/domain/architecture/branches";
 import type { ReactFlowArchitectureState } from "@/domain/architecture/reactFlowAdapter";
+import { architectureIRToReactFlow } from "@/domain/architecture/reactFlowAdapter";
 
 const BRANCHES_SUBCOLLECTION = "branches";
 
@@ -184,4 +186,138 @@ export async function deleteArchitectureBranch(
   await deleteDoc(
     doc(db, "architectures", architectureId, BRANCHES_SUBCOLLECTION, branchId),
   );
+}
+
+
+export class ArchitectureBranchMergeConflictError extends Error {
+  readonly code = "merge-conflict";
+
+  constructor(message = "Main changed since this branch was created.") {
+    super(message);
+    this.name = "ArchitectureBranchMergeConflictError";
+  }
+}
+
+export async function mergeArchitectureBranch(input: {
+  architectureId: string;
+  branchId: string;
+}): Promise<ArchitectureBranch> {
+  const architectureRef = doc(db, "architectures", input.architectureId);
+  const branchRef = doc(
+    db,
+    "architectures",
+    input.architectureId,
+    BRANCHES_SUBCOLLECTION,
+    input.branchId,
+  );
+  const baseSnapshotRef = (baseSnapshotId: string) =>
+    doc(
+      db,
+      "architectures",
+      input.architectureId,
+      "snapshots",
+      baseSnapshotId,
+    );
+
+  return runTransaction(db, async (transaction) => {
+    const [architectureSnapshot, branchSnapshot] = await Promise.all([
+      transaction.get(architectureRef),
+      transaction.get(branchRef),
+    ]);
+
+    if (!architectureSnapshot.exists()) {
+      throw new Error("Architecture not found.");
+    }
+
+    if (!branchSnapshot.exists()) {
+      throw new Error("Branch not found.");
+    }
+
+    const architectureData = architectureSnapshot.data();
+    const branch = toBranch(branchSnapshot.id, branchSnapshot.data());
+
+    if (branch.status !== "active") {
+      throw new Error("Only active branches can be merged.");
+    }
+
+    if (
+      typeof architectureData.ownerId !== "string" ||
+      architectureData.ownerId !== branch.ownerId
+    ) {
+      throw new Error("Architecture and branch ownership do not match.");
+    }
+
+    if (!branch.baseSnapshotId) {
+      throw new Error("The branch base snapshot is missing.");
+    }
+
+    const baseSnapshot = await transaction.get(
+      baseSnapshotRef(branch.baseSnapshotId),
+    );
+
+    if (!baseSnapshot.exists()) {
+      throw new Error("The branch base snapshot is unavailable.");
+    }
+
+    const baseData = baseSnapshot.data();
+    if (!isValidArchitectureIR(baseData.architectureIR)) {
+      throw new Error("The branch base snapshot contains invalid Architecture IR.");
+    }
+
+    const baseLayout =
+      typeof baseData.canvasLayout === "object" && baseData.canvasLayout !== null
+        ? (baseData.canvasLayout as CanvasLayout)
+        : { nodes: [], edges: [] };
+
+    const mainLayout =
+      typeof architectureData.canvasLayout === "object" &&
+      architectureData.canvasLayout !== null
+        ? (architectureData.canvasLayout as CanvasLayout)
+        : {
+            nodes: Array.isArray(architectureData.nodes)
+              ? (architectureData.nodes as CanvasLayout["nodes"])
+              : [],
+            edges: Array.isArray(architectureData.edges)
+              ? (architectureData.edges as CanvasLayout["edges"])
+              : [],
+          };
+
+    const mainIR = isValidArchitectureIR(architectureData.architectureIR)
+      ? architectureData.architectureIR
+      : reactFlowToArchitectureIR(mainLayout);
+
+    const mainUnchanged =
+      JSON.stringify(mainIR) === JSON.stringify(baseData.architectureIR) &&
+      JSON.stringify(mainLayout) === JSON.stringify(baseLayout);
+
+    if (!mainUnchanged) {
+      throw new ArchitectureBranchMergeConflictError();
+    }
+
+    assertValidArchitectureIR(branch.architectureIR);
+
+    const mergedLayout = architectureIRToReactFlow(
+      branch.architectureIR,
+      branch.canvasLayout,
+    );
+
+    transaction.update(architectureRef, {
+      nodes: mergedLayout.nodes,
+      edges: mergedLayout.edges,
+      canvasLayout: toFirestoreSafe(mergedLayout),
+      architectureIR: toFirestoreSafe(branch.architectureIR),
+      updatedAt: serverTimestamp(),
+    });
+
+    transaction.update(branchRef, {
+      status: "merged",
+      updatedAt: serverTimestamp(),
+    });
+
+    return {
+      ...branch,
+      status: "merged",
+      canvasLayout: mergedLayout,
+    };
+  });
 }
