@@ -2219,8 +2219,8 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                                 >
                                   {branchReviewLoading ? "Reviewing..." : "Review & Merge"}
                                 </button>
-                              )}
-                            </div>}
+                              </div>
+                            )}
                           </div>
                         </div>
                         <p className="mt-2 text-[11px] text-slate-500">
