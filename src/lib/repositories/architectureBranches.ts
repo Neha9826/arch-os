@@ -22,7 +22,10 @@ import type {
   ArchitectureBranchStatus,
 } from "@/domain/architecture/branches";
 import type { ReactFlowArchitectureState } from "@/domain/architecture/reactFlowAdapter";
-import { architectureIRToReactFlow } from "@/domain/architecture/reactFlowAdapter";
+import {
+  architectureIRToReactFlow,
+  reactFlowToArchitectureIR,
+} from "@/domain/architecture/reactFlowAdapter";
 
 const BRANCHES_SUBCOLLECTION = "branches";
 
@@ -220,10 +223,8 @@ export async function mergeArchitectureBranch(input: {
     );
 
   return runTransaction(db, async (transaction) => {
-    const [architectureSnapshot, branchSnapshot] = await Promise.all([
-      transaction.get(architectureRef),
-      transaction.get(branchRef),
-    ]);
+    const architectureSnapshot = await transaction.get(architectureRef);
+    const branchSnapshot = await transaction.get(branchRef);
 
     if (!architectureSnapshot.exists()) {
       throw new Error("Architecture not found.");
