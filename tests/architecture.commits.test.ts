@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   canCreateCommitFromParent,
+  diffArchitectureCommits,
   isCommitHeadAdvanced,
   isValidCommitMessage,
 } from "@/domain/architecture/commits";
@@ -25,6 +26,34 @@ describe("Architecture commit foundation", () => {
     expect(canCreateCommitFromParent("c1", "c1")).toBe(true);
     expect(canCreateCommitFromParent("c1", "c2")).toBe(false);
     expect(canCreateCommitFromParent("c1", undefined)).toBe(false);
+  });
+
+  test("compares two commits by semantic architecture and canvas state", () => {
+    const base = {
+      id: "c1",
+      architectureId: "a1",
+      workspaceId: "w1",
+      ownerId: "u1",
+      createdBy: "u1",
+      message: "base",
+      architectureIR: { schemaVersion: 1, components: [], relations: [] },
+      canvasLayout: { nodes: [], edges: [] },
+    };
+    const next = {
+      ...base,
+      id: "c2",
+      message: "next",
+      architectureIR: {
+        schemaVersion: 1,
+        components: [{ id: "api", kind: "service" as const, name: "API" }],
+        relations: [],
+      },
+      canvasLayout: { nodes: [{ id: "api", type: "tech", position: { x: 10, y: 20 }, data: { label: "API" } }], edges: [] },
+    };
+
+    const result = diffArchitectureCommits(base, next);
+    expect(result.semantic.summary.componentsAdded).toBe(1);
+    expect(result.canvasChanged).toBe(true);
   });
 
   test("requires the Main history head to advance to the new commit", () => {
