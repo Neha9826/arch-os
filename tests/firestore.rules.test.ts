@@ -18,6 +18,7 @@ import {
   setDoc,
   updateDoc,
   writeBatch,
+  serverTimestamp,
 } from "firebase/firestore";
 import fs from "node:fs";
 import path from "node:path";
@@ -571,7 +572,7 @@ describe("Architecture commit security rules", () => {
 
     batch.set(commitRef, {
       ...commitData,
-      createdAt: new Date(),
+      createdAt: serverTimestamp(),
     });
     batch.update(architectureRef, {
       headCommitId: "commit-a",
@@ -589,7 +590,7 @@ describe("Architecture commit security rules", () => {
         doc(db, "architectures", architectureA, "commits", "commit-a"),
         {
           ...commitData,
-          createdAt: new Date(),
+          createdAt: serverTimestamp(),
         },
       ),
     );
