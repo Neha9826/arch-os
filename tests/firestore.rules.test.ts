@@ -17,6 +17,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import fs from "node:fs";
 import path from "node:path";
@@ -531,6 +532,134 @@ describe("Architecture branch security rules", () => {
     await assertFails(deleteDoc(branchRef));
   });
 
+});
+
+
+describe("Architecture commit security rules", () => {
+  const commitData = {
+    architectureId: architectureA,
+    workspaceId: workspaceA,
+    ownerId: userA.uid,
+    createdBy: userA.uid,
+    message: "Initial baseline",
+    architectureIR: { schemaVersion: 1, components: [], relations: [] },
+    canvasLayout: { nodes: [], edges: [] },
+  };
+
+  async function seedCommitArchitecture() {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "workspaces", workspaceA), {
+        ownerId: userA.uid,
+        name: "User A Workspace",
+      });
+      await setDoc(doc(context.firestore(), "architectures", architectureA), {
+        ownerId: userA.uid,
+        workspaceId: workspaceA,
+        name: "Architecture A",
+        nodes: [],
+        edges: [],
+      });
+    });
+  }
+
+  test("owner can create the root commit only when it atomically becomes Main head", async () => {
+    await seedCommitArchitecture();
+    const db = authenticatedDb(userA);
+    const commitRef = doc(db, "architectures", architectureA, "commits", "commit-a");
+    const architectureRef = doc(db, "architectures", architectureA);
+    const batch = writeBatch(db);
+
+    batch.set(commitRef, {
+      ...commitData,
+      createdAt: new Date(),
+    });
+    batch.update(architectureRef, {
+      headCommitId: "commit-a",
+    });
+
+    await assertSucceeds(batch.commit());
+  });
+
+  test("a commit cannot be created without atomically advancing Main head", async () => {
+    await seedCommitArchitecture();
+    const db = authenticatedDb(userA);
+
+    await assertFails(
+      setDoc(
+        doc(db, "architectures", architectureA, "commits", "commit-a"),
+        {
+          ...commitData,
+          createdAt: new Date(),
+        },
+      ),
+    );
+  });
+
+  test("owner cannot forge Main head to an existing commit outside a commit creation transaction", async () => {
+    await seedCommitArchitecture();
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "architectures", architectureA, "commits", "commit-a"),
+        {
+          ...commitData,
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      );
+    });
+
+    const db = authenticatedDb(userA);
+    await assertFails(
+      updateDoc(doc(db, "architectures", architectureA), {
+        headCommitId: "commit-a",
+      }),
+    );
+  });
+
+  test("another user cannot advance or create architecture history", async () => {
+    await seedCommitArchitecture();
+    const db = authenticatedDb(userB);
+
+    await assertFails(
+      updateDoc(doc(db, "architectures", architectureA), {
+        headCommitId: "forged",
+      }),
+    );
+
+    await assertFails(
+      setDoc(
+        doc(db, "architectures", architectureA, "commits", "commit-b"),
+        {
+          ...commitData,
+          ownerId: userB.uid,
+          createdBy: userB.uid,
+          createdAt: new Date(),
+        },
+      ),
+    );
+  });
+
+  test("commit content remains immutable", async () => {
+    await seedCommitArchitecture();
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "architectures", architectureA, "commits", "commit-a"),
+        {
+          ...commitData,
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      );
+    });
+
+    const db = authenticatedDb(userA);
+    await assertFails(
+      updateDoc(
+        doc(db, "architectures", architectureA, "commits", "commit-a"),
+        { message: "Tampered" },
+      ),
+    );
+  });
 });
 
 describe("Architecture snapshot security rules", () => {
