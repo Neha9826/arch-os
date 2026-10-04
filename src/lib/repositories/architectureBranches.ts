@@ -20,6 +20,7 @@ import {
 import type {
   ArchitectureBranch,
   ArchitectureBranchStatus,
+  isArchitectureStateUnchanged,
 } from "@/domain/architecture/branches";
 import type { ReactFlowArchitectureState } from "@/domain/architecture/reactFlowAdapter";
 import {
@@ -287,9 +288,12 @@ export async function mergeArchitectureBranch(input: {
       ? architectureData.architectureIR
       : reactFlowToArchitectureIR(mainLayout);
 
-    const mainUnchanged =
-      JSON.stringify(mainIR) === JSON.stringify(baseData.architectureIR) &&
-      JSON.stringify(mainLayout) === JSON.stringify(baseLayout);
+    const mainUnchanged = isArchitectureStateUnchanged(
+      baseData.architectureIR,
+      mainIR,
+      baseLayout,
+      mainLayout,
+    );
 
     if (!mainUnchanged) {
       throw new ArchitectureBranchMergeConflictError();
