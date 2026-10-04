@@ -20,6 +20,14 @@ export type ArchitectureBranch = {
   updatedAt?: unknown;
 };
 
+export function canTransitionBranchStatus(
+  current: ArchitectureBranchStatus,
+  next: ArchitectureBranchStatus,
+): boolean {
+  if (current !== "active") return current === next;
+  return true;
+}
+
 export type ArchitectureBranchMergeResult =
   | { status: "merged" }
   | { status: "conflict"; reason: "main-changed-since-base" }
