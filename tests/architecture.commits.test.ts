@@ -36,7 +36,7 @@ describe("Architecture commit foundation", () => {
       ownerId: "u1",
       createdBy: "u1",
       message: "base",
-      architectureIR: { schemaVersion: 1, components: [], relations: [] },
+      architectureIR: { schemaVersion: 1 as const, components: [], relations: [] },
       canvasLayout: { nodes: [], edges: [] },
     };
     const next = {
