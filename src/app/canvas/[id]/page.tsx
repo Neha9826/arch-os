@@ -44,9 +44,9 @@ import {
   getArchitectureBranch,
   listArchitectureBranches,
   updateArchitectureBranch,
+  mergeArchitectureBranch,
 } from "@/lib/repositories/architectureBranches";
 import {
-  evaluateFastForwardMerge,
   type ArchitectureBranch,
 } from "@/domain/architecture/branches";
 import type { ArchitectureIR } from "@/domain/architecture/types";
@@ -503,75 +503,34 @@ function StudioEditor() {
       return;
     }
 
-    const baseSnapshot = snapshots.find((item) => item.id === branch.baseSnapshotId);
-    if (!baseSnapshot) {
-      setSaveError("The branch base snapshot is unavailable. Refresh snapshots and try again.");
-      return;
-    }
-
     setBranchMerging(true);
     setSaveError(null);
     setSaveNotice(null);
 
     try {
-      const architecture = await getArchitecture(projectId);
-      if (!architecture || architecture.ownerId !== user.uid) {
-        throw new Error("Architecture not found or access denied.");
-      }
-
-      const mainLayout = architecture.canvasLayout ?? {
-        nodes: architecture.nodes,
-        edges: architecture.edges,
-      };
-      const mainIR = architecture.architectureIR ?? reactFlowToArchitectureIR(mainLayout);
-
-      const mergeEvaluation = evaluateFastForwardMerge(
-        baseSnapshot.architectureIR,
-        mainIR,
-        branch.architectureIR,
-        branch.status,
-      );
-
-      if (mergeEvaluation.status !== "merged") {
-        setSaveError(
-          mergeEvaluation.status === "conflict"
-            ? "Merge stopped: Main changed after this branch was created. Review the latest Main and branch differences before merging."
-            : "Only active branches can be merged.",
-        );
-        return;
-      }
-
-      const mergedLayout = architectureIRToReactFlow(
-        branch.architectureIR,
-        branch.canvasLayout,
-      );
-
-      await updateArchitecture({
-        id: projectId,
-        name: architecture.name,
-        workspaceId: architecture.workspaceId,
-        nodes: mergedLayout.nodes,
-        edges: mergedLayout.edges,
-        canvasLayout: mergedLayout,
-        architectureIR: branch.architectureIR,
-      });
-
-      await updateArchitectureBranch({
+      const mergedBranch = await mergeArchitectureBranch({
         architectureId: projectId,
         branchId: branch.id,
-        name: branch.name,
-        description: branch.description,
-        status: "merged",
-        architectureIR: branch.architectureIR,
-        canvasLayout: branch.canvasLayout,
       });
+
+      const mergedLayout = architectureIRToReactFlow(
+        mergedBranch.architectureIR,
+        mergedBranch.canvasLayout,
+      );
 
       setNodes(mergedLayout.nodes);
       setEdges(mergedLayout.edges);
       setSelectedBranchId("");
       setBranches((current) =>
         current.map((item) =>
-          item.id === branch.id ? { ...item, status: "merged" } : item,
+          item.id === branch.id
+            ? {
+                ...item,
+                status: "merged",
+                architectureIR: mergedBranch.architectureIR,
+                canvasLayout: mergedBranch.canvasLayout,
+              }
+            : item,
         ),
       );
       setHasUnsavedChanges(false);
@@ -587,7 +546,9 @@ function StudioEditor() {
         getFirestoreErrorCode(error) === "permission-denied"
           ? "Permission denied. The branch could not be merged."
           : error instanceof Error
-            ? error.message
+            ? error.message.includes("Main changed since this branch was created.")
+              ? "Merge stopped: Main changed after this branch was created. Review the latest Main and branch differences before merging."
+              : error.message
             : "Could not merge this branch. Please try again.",
       );
     } finally {
