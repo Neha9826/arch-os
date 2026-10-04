@@ -54,8 +54,8 @@ import {
   createArchitecturePullRequest,
   listArchitecturePullRequests,
   updateArchitecturePullRequestStatus,
-  type ArchitecturePullRequest,
 } from "@/lib/repositories/architecturePullRequests";
+import type { ArchitecturePullRequest } from "@/domain/architecture/pullRequests";
 import { diffArchitectureCommits, type ArchitectureCommit } from "@/domain/architecture/commits";
 import {
   isArchitectureStateUnchanged,
