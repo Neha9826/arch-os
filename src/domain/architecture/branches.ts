@@ -25,6 +25,18 @@ export type ArchitectureBranchMergeResult =
   | { status: "conflict"; reason: "main-changed-since-base" }
   | { status: "invalid"; reason: "branch-not-active" };
 
+export function isArchitectureStateUnchanged(
+  baseIR: ArchitectureIR,
+  currentIR: ArchitectureIR,
+  baseLayout: ReactFlowArchitectureState,
+  currentLayout: ReactFlowArchitectureState,
+): boolean {
+  return (
+    JSON.stringify(currentIR) === JSON.stringify(baseIR) &&
+    JSON.stringify(currentLayout) === JSON.stringify(baseLayout)
+  );
+}
+
 export function evaluateFastForwardMerge(
   base: ArchitectureIR,
   main: ArchitectureIR,
