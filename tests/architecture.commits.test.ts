@@ -16,12 +16,13 @@ describe("Architecture commit foundation", () => {
     expect(isValidCommitMessage("x".repeat(201))).toBe(false);
   });
 
-  test("allows a root commit without a parent", () => {
-    expect(canCreateCommitFromParent(undefined, new Set())).toBe(true);
+  test("allows a root commit when Main has no history head", () => {
+    expect(canCreateCommitFromParent(undefined, undefined)).toBe(true);
   });
 
-  test("requires an existing parent when one is supplied", () => {
-    expect(canCreateCommitFromParent("c1", new Set(["c1"]))).toBe(true);
-    expect(canCreateCommitFromParent("missing", new Set(["c1"]))).toBe(false);
+  test("requires the new commit parent to equal the current Main head", () => {
+    expect(canCreateCommitFromParent("c1", "c1")).toBe(true);
+    expect(canCreateCommitFromParent("c1", undefined)).toBe(false);
+    expect(canCreateCommitFromParent("c1", "c2")).toBe(false);
   });
 });
