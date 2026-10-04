@@ -137,6 +137,7 @@ function StudioEditor() {
   const [commitsLoading, setCommitsLoading] = useState(false);
   const [compareCommitBeforeId, setCompareCommitBeforeId] = useState("");
   const [compareCommitAfterId, setCompareCommitAfterId] = useState("");
+  const [selectedCommit, setSelectedCommit] = useState<ArchitectureCommit | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
   const [commitSaving, setCommitSaving] = useState(false);
   const [snapshots, setSnapshots] = useState<ArchitectureSnapshot[]>([]);
@@ -312,6 +313,33 @@ function StudioEditor() {
     setNodes,
     user,
   ]);
+
+  const handleRestoreCommitAsWorkingState = (commit: ArchitectureCommit) => {
+    if (selectedBranchId) {
+      setSaveError("Switch to Main before restoring a commit as working state.");
+      return;
+    }
+
+    if (hasUnsavedChanges) {
+      setSaveError("Save or discard your current changes before restoring a commit.");
+      return;
+    }
+
+    const restored = architectureIRToReactFlow(
+      commit.architectureIR,
+      commit.canvasLayout,
+    );
+
+    setNodes(restored.nodes);
+    setEdges(restored.edges);
+    setHasUnsavedChanges(true);
+    setSelectedCommit(null);
+    setShowCommitHistoryModal(false);
+    setSaveNotice(
+      `Commit restored as working state: ${commit.message}. Main and commit history are unchanged.`,
+    );
+    setSaveError(null);
+  };
 
   const openCommitHistory = async () => {
     if (isNewProject) {
@@ -1778,16 +1806,110 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                           <p className="mt-1 text-xs text-slate-500">
                             {commit.id === architectureHeadCommitId ? "Current Main HEAD" : "Ancestor"} · {commit.id.slice(0, 8)}
                           </p>
+                          {commit.parentCommitId && (
+                            <p className="mt-1 text-xs text-slate-600">parent {commit.parentCommitId.slice(0, 8)}</p>
+                          )}
                         </div>
-                        {commit.parentCommitId && (
-                          <span className="text-xs text-slate-500">parent {commit.parentCommitId.slice(0, 8)}</span>
-                        )}
+                        <button
+                          onClick={() => setSelectedCommit(commit)}
+                          className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-500"
+                        >
+                          <Eye size={14} /> Preview
+                        </button>
                       </div>
                     </div>
                   ))}
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {selectedCommit && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-800 px-5 py-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Eye className="text-violet-300" size={19} />
+                  <h3 className="truncate text-lg font-semibold text-slate-100">
+                    Commit preview: {selectedCommit.message}
+                  </h3>
+                </div>
+                <p className="mt-1 text-xs text-slate-400">
+                  Read-only view · Commit {selectedCommit.id.slice(0, 8)}
+                  {selectedCommit.parentCommitId ? ` · parent ${selectedCommit.parentCommitId.slice(0, 8)}` : " · root commit"}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedCommit(null)}
+                className="rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="relative min-h-[360px] w-full flex-none bg-slate-950" style={{ height: "65vh", width: "100%" }}>
+              {(() => {
+                const previewLayout = architectureIRToReactFlow(
+                  selectedCommit.architectureIR,
+                  selectedCommit.canvasLayout,
+                );
+
+                return previewLayout.nodes.length > 0 ? (
+                  <ReactFlowProvider>
+                    <ReactFlow
+                      nodes={previewLayout.nodes}
+                      edges={previewLayout.edges}
+                      nodeTypes={nodeTypes}
+                      fitView
+                      fitViewOptions={{ padding: 0.25, minZoom: 0.25, maxZoom: 1.5 }}
+                      onInit={(instance) => {
+                        requestAnimationFrame(() => {
+                          instance.fitView({ padding: 0.25, minZoom: 0.25, maxZoom: 1.5 });
+                        });
+                      }}
+                      style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+                      nodesDraggable={false}
+                      nodesConnectable={false}
+                      elementsSelectable={false}
+                      panOnDrag
+                      zoomOnScroll
+                      proOptions={{ hideAttribution: true }}
+                    >
+                      <Background color="#334155" gap={20} />
+                      <Controls className="bg-slate-800 border-slate-700 fill-white" />
+                    </ReactFlow>
+                  </ReactFlowProvider>
+                ) : (
+                  <div className="flex h-full items-center justify-center p-8 text-center text-sm text-slate-400">
+                    This commit contains no components to preview.
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-800 px-5 py-4">
+              <p className="text-xs text-slate-500">
+                Restoring does not change Main or commit history. It only loads this version into your working canvas.
+              </p>
+              <div className="flex shrink-0 gap-3">
+                <button
+                  onClick={() => setSelectedCommit(null)}
+                  className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => handleRestoreCommitAsWorkingState(selectedCommit)}
+                  disabled={selectedBranchId !== ""}
+                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Restore as Working State
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
