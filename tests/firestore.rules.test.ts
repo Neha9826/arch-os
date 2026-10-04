@@ -640,6 +640,80 @@ describe("Architecture commit security rules", () => {
     );
   });
 
+  test("a second commit must use the current Main head as its parent", async () => {
+    await seedCommitArchitecture();
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "architectures", architectureA, "commits", "commit-a"),
+        {
+          ...commitData,
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      );
+      await updateDoc(doc(context.firestore(), "architectures", architectureA), {
+        headCommitId: "commit-a",
+      });
+    });
+
+    const db = authenticatedDb(userA);
+    await assertFails(
+      runTransaction(db, async (transaction) => {
+        const architectureRef = doc(db, "architectures", architectureA);
+        const commitRef = doc(db, "architectures", architectureA, "commits", "commit-b");
+        transaction.set(commitRef, {
+          ...commitData,
+          message: "Forged ancestry",
+          parentCommitId: "not-the-head",
+          createdAt: serverTimestamp(),
+        });
+        transaction.update(architectureRef, { headCommitId: "commit-b" });
+      }),
+    );
+  });
+
+  test("a commit cannot reuse a parent from another architecture", async () => {
+    await seedCommitArchitecture();
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "workspaces", "workspace-b"), {
+        ownerId: userA.uid,
+        name: "Workspace B",
+      });
+      await setDoc(doc(context.firestore(), "architectures", "architecture-b"), {
+        ownerId: userA.uid,
+        workspaceId: "workspace-b",
+        name: "Architecture B",
+        nodes: [],
+        edges: [],
+      });
+      await setDoc(
+        doc(context.firestore(), "architectures", "architecture-b", "commits", "foreign"),
+        {
+          ...commitData,
+          architectureId: "architecture-b",
+          workspaceId: "workspace-b",
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      );
+    });
+
+    const db = authenticatedDb(userA);
+    await assertFails(
+      runTransaction(db, async (transaction) => {
+        const architectureRef = doc(db, "architectures", architectureA);
+        const commitRef = doc(db, "architectures", architectureA, "commits", "commit-b");
+        transaction.set(commitRef, {
+          ...commitData,
+          message: "Foreign parent",
+          parentCommitId: "foreign",
+          createdAt: serverTimestamp(),
+        });
+        transaction.update(architectureRef, { headCommitId: "commit-b" });
+      }),
+    );
+  });
+
   test("commit content remains immutable", async () => {
     await seedCommitArchitecture();
 
