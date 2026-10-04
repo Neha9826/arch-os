@@ -174,6 +174,56 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // Pull requests are owner-scoped review records tied to an architecture branch.
+      match /pullRequests/{pullRequestId} {
+        function isParentArchitectureOwner() {
+          return isSignedIn()
+            && exists(/databases/$(database)/documents/architectures/$(architectureId))
+            && get(/databases/$(database)/documents/architectures/$(architectureId)).data.ownerId == request.auth.uid;
+        }
+
+        allow get, list: if isParentArchitectureOwner();
+
+        allow create: if isParentArchitectureOwner()
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.architectureId == architectureId
+          && request.resource.data.workspaceId == get(/databases/$(database)/documents/architectures/$(architectureId)).data.workspaceId
+          && request.resource.data.sourceBranchId is string
+          && request.resource.data.sourceBranchId.size() > 0
+          && exists(/databases/$(database)/documents/architectures/$(architectureId)/branches/$(request.resource.data.sourceBranchId))
+          && get(/databases/$(database)/documents/architectures/$(architectureId)/branches/$(request.resource.data.sourceBranchId)).data.ownerId == request.auth.uid
+          && get(/databases/$(database)/documents/architectures/$(architectureId)/branches/$(request.resource.data.sourceBranchId)).data.status == "active"
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 120
+          && request.resource.data.status == "open"
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if isParentArchitectureOwner()
+          && resource.data.ownerId == request.auth.uid
+          && resource.data.architectureId == architectureId
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.architectureId == resource.data.architectureId
+          && request.resource.data.workspaceId == resource.data.workspaceId
+          && request.resource.data.sourceBranchId == resource.data.sourceBranchId
+          && request.resource.data.baseSnapshotId == resource.data.baseSnapshotId
+          && request.resource.data.sourceBranchName == resource.data.sourceBranchName
+          && request.resource.data.title == resource.data.title
+          && request.resource.data.description == resource.data.description
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.status in ["open", "closed", "merged"]
+          && (
+            (resource.data.status == "open" && request.resource.data.status in ["open", "closed", "merged"])
+            || request.resource.data.status == resource.data.status
+          )
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if false;
+      }
+
       // Branches are mutable working copies created from a saved snapshot.
       match /branches/{branchId} {
         function isParentArchitectureOwner() {
