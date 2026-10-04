@@ -44,7 +44,7 @@ describe("Architecture commit foundation", () => {
       id: "c2",
       message: "next",
       architectureIR: {
-        schemaVersion: 1,
+        schemaVersion: 1 as const,
         components: [{ id: "api", kind: "service" as const, name: "API" }],
         relations: [],
       },
