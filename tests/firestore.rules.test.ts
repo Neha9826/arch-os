@@ -17,6 +17,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  runTransaction,
   writeBatch,
   serverTimestamp,
 } from "firebase/firestore";
@@ -559,6 +560,8 @@ describe("Architecture commit security rules", () => {
         name: "Architecture A",
         nodes: [],
         edges: [],
+        architectureIR: { schemaVersion: 1, components: [], relations: [] },
+        canvasLayout: { nodes: [], edges: [] },
       });
     });
   }
