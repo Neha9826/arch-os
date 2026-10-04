@@ -1,6 +1,12 @@
 import type { ArchitectureIR } from "./types";
+import { diffArchitectures, type ArchitectureDiff } from "./diff";
 
 import type { ReactFlowArchitectureState } from "./reactFlowAdapter";
+
+export type ArchitectureCommitDiff = {
+  semantic: ArchitectureDiff;
+  canvasChanged: boolean;
+};
 
 export type ArchitectureCommit = {
   id: string;
@@ -25,6 +31,16 @@ export function canCreateCommitFromParent(
   parentCommitId: string | undefined,
 ): boolean {
   return currentHeadCommitId === parentCommitId;
+}
+
+export function diffArchitectureCommits(
+  before: ArchitectureCommit,
+  after: ArchitectureCommit,
+): ArchitectureCommitDiff {
+  return {
+    semantic: diffArchitectures(before.architectureIR, after.architectureIR),
+    canvasChanged: JSON.stringify(before.canvasLayout) !== JSON.stringify(after.canvasLayout),
+  };
 }
 
 export function isCommitHeadAdvanced(
