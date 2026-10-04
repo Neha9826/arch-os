@@ -140,6 +140,7 @@ service cloud.firestore {
           && request.resource.data.canvasLayout == get(/databases/$(database)/documents/architectures/$(architectureId)/snapshots/$(request.resource.data.baseSnapshotId)).data.canvasLayout;
 
         allow update: if isParentArchitectureOwner()
+          && resource.data.status == "active"
           && request.resource.data.architectureId == resource.data.architectureId
           && request.resource.data.workspaceId == resource.data.workspaceId
           && request.resource.data.ownerId == resource.data.ownerId
@@ -155,7 +156,10 @@ service cloud.firestore {
           && request.resource.data.architectureIR is map
           && request.resource.data.canvasLayout is map;
 
-        allow delete: if isParentArchitectureOwner();
+        // Active branches may be discarded, but terminal branches remain
+        // immutable so the architecture history stays auditable.
+        allow delete: if isParentArchitectureOwner()
+          && resource.data.status == "active";
       }
     }
   }
