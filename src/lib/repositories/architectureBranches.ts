@@ -17,10 +17,10 @@ import {
   assertValidArchitectureIR,
   isValidArchitectureIR,
 } from "@/domain/architecture/validation";
-import type {
-  ArchitectureBranch,
-  ArchitectureBranchStatus,
+import {
   isArchitectureStateUnchanged,
+  type ArchitectureBranch,
+  type ArchitectureBranchStatus,
 } from "@/domain/architecture/branches";
 import type { ReactFlowArchitectureState } from "@/domain/architecture/reactFlowAdapter";
 import {
