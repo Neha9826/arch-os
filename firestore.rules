@@ -157,11 +157,17 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time
           && getAfter(/databases/$(database)/documents/architectures/$(architectureId)).data.headCommitId == commitId
           && (
-            !request.resource.data.keys().hasAll(['parentCommitId'])
+            (
+              !request.resource.data.keys().hasAll(['parentCommitId'])
+              && !get(/databases/$(database)/documents/architectures/$(architectureId)).data.keys().hasAll(['headCommitId'])
+            )
             || (
               request.resource.data.parentCommitId is string
+              && get(/databases/$(database)/documents/architectures/$(architectureId)).data.headCommitId == request.resource.data.parentCommitId
               && exists(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.parentCommitId))
               && get(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.parentCommitId)).data.ownerId == request.auth.uid
+              && get(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.parentCommitId)).data.architectureId == architectureId
+              && get(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.parentCommitId)).data.workspaceId == request.resource.data.workspaceId
             )
           );
 
