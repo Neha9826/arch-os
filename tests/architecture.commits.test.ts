@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   canCreateCommitFromParent,
+  isCommitHeadAdvanced,
   isValidCommitMessage,
 } from "@/domain/architecture/commits";
 
@@ -20,9 +21,15 @@ describe("Architecture commit foundation", () => {
     expect(canCreateCommitFromParent(undefined, undefined)).toBe(true);
   });
 
-  test("requires the new commit parent to equal the current Main head", () => {
+  test("requires the supplied parent to equal the current history head", () => {
     expect(canCreateCommitFromParent("c1", "c1")).toBe(true);
-    expect(canCreateCommitFromParent("c1", undefined)).toBe(false);
     expect(canCreateCommitFromParent("c1", "c2")).toBe(false);
+    expect(canCreateCommitFromParent("c1", undefined)).toBe(false);
+  });
+
+  test("requires the Main history head to advance to the new commit", () => {
+    expect(isCommitHeadAdvanced(undefined, "c1")).toBe(true);
+    expect(isCommitHeadAdvanced("c1", "c2")).toBe(true);
+    expect(isCommitHeadAdvanced("c1", "c1")).toBe(false);
   });
 });
