@@ -73,6 +73,8 @@ service cloud.firestore {
               )
             )
             && getAfter(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.createdAt == request.time
+            && getAfter(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.architectureIR == request.resource.data.architectureIR
+            && getAfter(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.canvasLayout == request.resource.data.canvasLayout
           )
         )
         && (
