@@ -1864,6 +1864,192 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
         </div>
       )}
 
+      {showBranchReviewModal && reviewingBranch && reviewingBaseSnapshot && reviewingMainIR && reviewingMainLayout && (() => {
+        const branchDiff = diffArchitectures(
+          reviewingBaseSnapshot.architectureIR,
+          reviewingBranch.architectureIR,
+        );
+        const mainDiff = diffArchitectures(
+          reviewingBaseSnapshot.architectureIR,
+          reviewingMainIR,
+        );
+        const mainSemanticChanged = JSON.stringify(reviewingMainIR) !== JSON.stringify(reviewingBaseSnapshot.architectureIR);
+        const mainLayoutChanged = JSON.stringify(reviewingMainLayout) !== JSON.stringify(reviewingBaseSnapshot.canvasLayout);
+        const mainChanged = mainSemanticChanged || mainLayoutChanged;
+        const totalChanges =
+          branchDiff.summary.componentsAdded +
+          branchDiff.summary.componentsRemoved +
+          branchDiff.summary.componentsModified +
+          branchDiff.summary.relationsAdded +
+          branchDiff.summary.relationsRemoved +
+          branchDiff.summary.relationsModified;
+
+        const closeReview = () => {
+          if (branchMerging) return;
+          setShowBranchReviewModal(false);
+          setReviewingBranch(null);
+          setReviewingBaseSnapshot(null);
+          setReviewingMainIR(null);
+          setReviewingMainLayout(null);
+        };
+
+        const renderBranchReviewChanges = (
+          title: string,
+          changes: typeof branchDiff.components | typeof branchDiff.relations,
+          relation: boolean,
+        ) => (
+          <div className="mt-4">
+            <h5 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</h5>
+            {changes.length === 0 ? (
+              <p className="text-sm text-slate-500">No {relation ? "connection" : "component"} changes.</p>
+            ) : (
+              <div className="space-y-2">
+                {changes.map((change) => {
+                  const item = change.after ?? change.before;
+                  const name = relation
+                    ? formatRelationDescription(
+                        item as ArchitectureIR["relations"][number],
+                        change.status === "removed"
+                          ? reviewingBaseSnapshot.architectureIR
+                          : reviewingBranch.architectureIR,
+                      )
+                    : (item as ArchitectureIR["components"][number]).name;
+                  return (
+                    <div key={change.id} className="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm text-slate-200">{name}</p>
+                        <span className="rounded-md bg-slate-800 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">
+                          {change.status}
+                        </span>
+                      </div>
+                      {change.status === "modified" && change.changedFields.length > 0 && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          Changed: {change.changedFields.join(", ")}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+
+        return (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+            <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+              <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-800 px-5 py-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <GitCompareArrows size={19} className="text-violet-300" />
+                    <h3 className="text-lg font-semibold text-slate-100">Review merge: {reviewingBranch.name}</h3>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Base: <span className="text-slate-200">{reviewingBaseSnapshot.name}</span> · Main is checked again before merge.
+                  </p>
+                </div>
+                <button onClick={closeReview} className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-800 hover:text-slate-300">✕</button>
+              </div>
+
+              <div className="overflow-y-auto p-5">
+                <div className={`rounded-xl border p-4 ${mainChanged ? "border-red-900/60 bg-red-950/20" : "border-emerald-900/60 bg-emerald-950/20"}`}>
+                  <div className="flex items-start gap-3">
+                    {mainChanged ? (
+                      <AlertTriangle className="mt-0.5 text-red-300" size={19} />
+                    ) : (
+                      <Check className="mt-0.5 text-emerald-300" size={19} />
+                    )}
+                    <div>
+                      <p className={`font-medium ${mainChanged ? "text-red-200" : "text-emerald-200"}`}>
+                        {mainChanged ? "Merge blocked: Main changed since this branch was created." : "Main is unchanged from the branch base."}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {mainChanged
+                          ? "No changes have been applied. Review the Main changes below before deciding what to do next."
+                          : "This merge can use the safe fast-forward path. Main will only change after you confirm the merge."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-4 md:grid-cols-3">
+                  <div className="rounded-xl border border-violet-900/50 bg-violet-950/20 p-4">
+                    <p className="text-xs text-violet-300">Branch proposal</p>
+                    <p className="mt-1 text-2xl font-semibold text-slate-100">{totalChanges}</p>
+                    <p className="text-xs text-slate-400">semantic changes from base</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                    <p className="text-xs text-slate-400">Main since base</p>
+                    <p className="mt-1 text-2xl font-semibold text-slate-100">
+                      {mainSemanticChanged ? "Changed" : "Unchanged"}
+                    </p>
+                    <p className="text-xs text-slate-500">{mainLayoutChanged ? "Canvas layout also changed." : "Canvas layout unchanged."}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                    <p className="text-xs text-slate-400">Merge mode</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-100">Fast-forward only</p>
+                    <p className="text-xs text-slate-500">No automatic conflict resolution.</p>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                  <h4 className="text-sm font-semibold text-slate-100">What will change in Main?</h4>
+                  {totalChanges === 0 ? (
+                    <p className="mt-3 text-sm text-slate-400">This branch has no semantic architecture changes relative to its base.</p>
+                  ) : (
+                    <>
+                      {renderBranchReviewChanges("Component changes", branchDiff.components, false)}
+                      {renderBranchReviewChanges("Connection changes", branchDiff.relations, true)}
+                    </>
+                  )}
+                  <p className="mt-3 text-xs text-slate-500">
+                    Canvas positions and styling are not counted as semantic changes, but the branch canvas will become Main's canvas on merge.
+                  </p>
+                </div>
+
+                {mainChanged && (
+                  <div className="mt-4 rounded-xl border border-amber-900/60 bg-amber-950/20 p-4">
+                    <h4 className="text-sm font-semibold text-amber-200">Main changes since branch base</h4>
+                    {mainDiff.summary.componentsAdded +
+                      mainDiff.summary.componentsRemoved +
+                      mainDiff.summary.componentsModified +
+                      mainDiff.summary.relationsAdded +
+                      mainDiff.summary.relationsRemoved +
+                      mainDiff.summary.relationsModified === 0 ? (
+                      <p className="mt-2 text-sm text-amber-100/80">
+                        Main changed only in canvas layout. The fast-forward merge is still blocked so those changes are not silently overwritten.
+                      </p>
+                    ) : (
+                      <>
+                        {renderBranchReviewChanges("Main component changes", mainDiff.components, false)}
+                        {renderBranchReviewChanges("Main connection changes", mainDiff.relations, true)}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex shrink-0 justify-end gap-3 border-t border-slate-800 px-5 py-4">
+                <button
+                  onClick={closeReview}
+                  disabled={branchMerging}
+                  className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => void handleMergeBranch(reviewingBranch)}
+                  disabled={mainChanged || totalChanges === 0 || branchMerging}
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {branchMerging ? "Merging..." : "Confirm Merge to Main"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {selectedSnapshot && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
           <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
