@@ -139,6 +139,7 @@ function StudioEditor() {
   const [branches, setBranches] = useState<ArchitectureBranch[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [selectedBranchId, setSelectedBranchId] = useState("");
+  const [branchMerging, setBranchMerging] = useState(false);
   const [lintResult, setLintResult] = useState<ArchitectureLintResult | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
@@ -422,6 +423,94 @@ function StudioEditor() {
       setShowExitModal(true);
     } else {
       router.push("/");
+    }
+  };
+
+  const handleMergeBranch = async (branch: ArchitectureBranch) => {
+    if (!user || isNewProject || branchMerging) return;
+    if (branch.status !== "active") {
+      setSaveError("Only active branches can be merged.");
+      return;
+    }
+
+    const baseSnapshot = snapshots.find((item) => item.id === branch.baseSnapshotId);
+    if (!baseSnapshot) {
+      setSaveError("The branch base snapshot is unavailable. Refresh snapshots and try again.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Merge "${branch.name}" into the main architecture? This uses a safe fast-forward merge and will not overwrite main if main changed since the branch base.`,
+    );
+    if (!confirmed) return;
+
+    setBranchMerging(true);
+    setSaveError(null);
+    setSaveNotice(null);
+
+    try {
+      const architecture = await getArchitecture(projectId);
+      if (!architecture || architecture.ownerId !== user.uid) {
+        throw new Error("Architecture not found or access denied.");
+      }
+
+      const mainLayout = architecture.canvasLayout ?? {
+        nodes: architecture.nodes,
+        edges: architecture.edges,
+      };
+      const mainIR = architecture.architectureIR ?? reactFlowToArchitectureIR(mainLayout);
+
+      if (JSON.stringify(mainIR) !== JSON.stringify(baseSnapshot.architectureIR)) {
+        setSaveError("Merge stopped: the main architecture changed after this branch was created. Create a new branch or resolve the changes manually.");
+        return;
+      }
+
+      const mergedLayout = architectureIRToReactFlow(
+        branch.architectureIR,
+        branch.canvasLayout,
+      );
+
+      await updateArchitecture({
+        id: projectId,
+        name: architecture.name,
+        workspaceId: architecture.workspaceId,
+        nodes: mergedLayout.nodes,
+        edges: mergedLayout.edges,
+        canvasLayout: mergedLayout,
+        architectureIR: branch.architectureIR,
+      });
+
+      await updateArchitectureBranch({
+        architectureId: projectId,
+        branchId: branch.id,
+        name: branch.name,
+        description: branch.description,
+        status: "merged",
+        architectureIR: branch.architectureIR,
+        canvasLayout: branch.canvasLayout,
+      });
+
+      setNodes(mergedLayout.nodes);
+      setEdges(mergedLayout.edges);
+      setSelectedBranchId("");
+      setBranches((current) =>
+        current.map((item) =>
+          item.id === branch.id ? { ...item, status: "merged" } : item,
+        ),
+      );
+      setHasUnsavedChanges(false);
+      setSaveNotice(`Branch merged: ${branch.name}`);
+    } catch (error) {
+      console.error("Error merging branch:", error);
+      setSaveError(
+        getFirestoreErrorCode(error) === "permission-denied"
+          ? "Permission denied. The branch could not be merged."
+          : error instanceof Error
+            ? error.message
+            : "Could not merge this branch. Please try again.",
+      );
+    } finally {
+      setBranchMerging(false);
     }
   };
 
@@ -1545,12 +1634,23 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                               Based on: <span className="text-slate-300">{baseSnapshot?.name ?? branch.baseSnapshotId}</span>
                             </p>
                           </div>
-                          <span className="rounded-md border border-violet-800/60 bg-violet-950/40 px-2 py-1 text-[11px] font-medium capitalize text-violet-200">
-                            {branch.status}
-                          </span>
+                          <div className="flex shrink-0 flex-col items-end gap-2">
+                            <span className="rounded-md border border-violet-800/60 bg-violet-950/40 px-2 py-1 text-[11px] font-medium capitalize text-violet-200">
+                              {branch.status}
+                            </span>
+                            {branch.status === "active" && (
+                              <button
+                                onClick={() => void handleMergeBranch(branch)}
+                                disabled={branchMerging || hasUnsavedChanges}
+                                className="rounded-lg border border-emerald-700/60 bg-emerald-950/30 px-3 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {branchMerging ? "Merging..." : "Merge to Main"}
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <p className="mt-2 text-[11px] text-slate-500">
-                          Changes are saved only to this branch. The main architecture remains unchanged.
+                          Changes are saved only to this branch. Merge uses a safe fast-forward check and stops if Main changed since the branch base.
                         </p>
                       </div>
                     );
