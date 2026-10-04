@@ -47,6 +47,7 @@ import {
   mergeArchitectureBranch,
 } from "@/lib/repositories/architectureBranches";
 import {
+  isArchitectureStateUnchanged,
   type ArchitectureBranch,
 } from "@/domain/architecture/branches";
 import type { ArchitectureIR } from "@/domain/architecture/types";
@@ -1836,7 +1837,12 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
         );
         const mainSemanticChanged = JSON.stringify(reviewingMainIR) !== JSON.stringify(reviewingBaseSnapshot.architectureIR);
         const mainLayoutChanged = JSON.stringify(reviewingMainLayout) !== JSON.stringify(reviewingBaseSnapshot.canvasLayout);
-        const mainChanged = mainSemanticChanged || mainLayoutChanged;
+        const mainChanged = !isArchitectureStateUnchanged(
+          reviewingBaseSnapshot.architectureIR,
+          reviewingMainIR,
+          reviewingBaseSnapshot.canvasLayout,
+          reviewingMainLayout,
+        );
         const totalChanges =
           branchDiff.summary.componentsAdded +
           branchDiff.summary.componentsRemoved +
