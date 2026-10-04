@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  canTransitionBranchStatus,
   evaluateFastForwardMerge,
   isArchitectureStateUnchanged,
 } from "@/domain/architecture/branches";
@@ -38,6 +39,23 @@ const changed: ArchitectureIR = {
   ],
   relations: [],
 };
+
+describe("Architecture branch lifecycle", () => {
+  test("allows active branches to remain active or transition to a terminal status", () => {
+    expect(canTransitionBranchStatus("active", "active")).toBe(true);
+    expect(canTransitionBranchStatus("active", "merged")).toBe(true);
+    expect(canTransitionBranchStatus("active", "abandoned")).toBe(true);
+  });
+
+  test("does not allow terminal branches to change or reopen", () => {
+    expect(canTransitionBranchStatus("merged", "merged")).toBe(true);
+    expect(canTransitionBranchStatus("merged", "active")).toBe(false);
+    expect(canTransitionBranchStatus("merged", "abandoned")).toBe(false);
+    expect(canTransitionBranchStatus("abandoned", "abandoned")).toBe(true);
+    expect(canTransitionBranchStatus("abandoned", "active")).toBe(false);
+    expect(canTransitionBranchStatus("abandoned", "merged")).toBe(false);
+  });
+});
 
 describe("Architecture branch merge evaluation", () => {
   test("allows an active branch when Main is unchanged from the base", () => {
