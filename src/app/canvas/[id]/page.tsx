@@ -2213,13 +2213,14 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                                   Open PR
                                 </button>
                                 <button
-                                  onClick={() => void handleOpenBranchReview(branch)
-                                disabled={branchMerging || hasUnsavedChanges}
-                                className="rounded-lg border border-emerald-700/60 bg-emerald-950/30 px-3 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                {branchReviewLoading ? "Reviewing..." : "Review & Merge"}
-                              </button>
-                            )}
+                                  onClick={() => void handleOpenBranchReview(branch)}
+                                  disabled={branchMerging || hasUnsavedChanges}
+                                  className="rounded-lg border border-emerald-700/60 bg-emerald-950/30 px-3 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {branchReviewLoading ? "Reviewing..." : "Review & Merge"}
+                                </button>
+                              )}
+                            </div>}
                           </div>
                         </div>
                         <p className="mt-2 text-[11px] text-slate-500">
