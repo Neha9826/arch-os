@@ -50,6 +50,12 @@ import {
   createArchitectureCommit,
   listArchitectureCommits,
 } from "@/lib/repositories/architectureCommits";
+import {
+  createArchitecturePullRequest,
+  listArchitecturePullRequests,
+  updateArchitecturePullRequestStatus,
+  type ArchitecturePullRequest,
+} from "@/lib/repositories/architecturePullRequests";
 import { diffArchitectureCommits, type ArchitectureCommit } from "@/domain/architecture/commits";
 import {
   isArchitectureStateUnchanged,
@@ -168,6 +174,12 @@ function StudioEditor() {
   const [reviewingMainIR, setReviewingMainIR] = useState<ArchitectureIR | null>(null);
   const [reviewingMainLayout, setReviewingMainLayout] = useState<ReactFlowArchitectureState | null>(null);
   const [branchReviewLoading, setBranchReviewLoading] = useState(false);
+  const [pullRequests, setPullRequests] = useState<ArchitecturePullRequest[]>([]);
+  const [pullRequestsLoading, setPullRequestsLoading] = useState(false);
+  const [pullRequestCreating, setPullRequestCreating] = useState(false);
+  const [pullRequestTitle, setPullRequestTitle] = useState("");
+  const [pullRequestDescription, setPullRequestDescription] = useState("");
+  const [pullRequestBranchId, setPullRequestBranchId] = useState("");
   const [lintResult, setLintResult] = useState<ArchitectureLintResult | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
@@ -963,6 +975,60 @@ function StudioEditor() {
       );
     } finally {
       setSnapshotSaving(false);
+    }
+  };
+
+  const loadPullRequests = async () => {
+    if (isNewProject) return;
+    setPullRequestsLoading(true);
+    try {
+      setPullRequests(await listArchitecturePullRequests(projectId));
+    } catch (error) {
+      console.error("Error loading architecture pull requests:", error);
+      setSnapshotError("Could not load architecture pull requests.");
+    } finally {
+      setPullRequestsLoading(false);
+    }
+  };
+
+  const handleCreatePullRequest = async (branch: ArchitectureBranch) => {
+    if (!user || isNewProject || pullRequestCreating || branch.status !== "active") return;
+    const title = pullRequestTitle.trim();
+    if (!title) {
+      setSnapshotError("Enter a pull request title.");
+      return;
+    }
+
+    setPullRequestCreating(true);
+    setSnapshotError(null);
+    try {
+      const workspace = await ensurePersonalWorkspace(user.uid);
+      const resolvedWorkspaceId = workspaceId || workspace.id;
+      await createArchitecturePullRequest({
+        architectureId: projectId,
+        workspaceId: resolvedWorkspaceId,
+        ownerId: user.uid,
+        createdBy: user.uid,
+        sourceBranchId: branch.id,
+        title,
+        description: pullRequestDescription,
+      });
+      await loadPullRequests();
+      setPullRequestTitle("");
+      setPullRequestDescription("");
+      setPullRequestBranchId("");
+      setSaveNotice(`Pull request opened for ${branch.name}.`);
+    } catch (error) {
+      console.error("Error creating pull request:", error);
+      setSnapshotError(
+        getFirestoreErrorCode(error) === "permission-denied"
+          ? "Permission denied. The pull request could not be created."
+          : error instanceof Error
+            ? error.message
+            : "Could not create the pull request.",
+      );
+    } finally {
+      setPullRequestCreating(false);
     }
   };
 
@@ -2133,8 +2199,21 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                               {branch.status}
                             </span>
                             {branch.status === "active" && (
-                              <button
-                                onClick={() => void handleOpenBranchReview(branch)}
+                              <div className="flex flex-wrap justify-end gap-2">
+                                <button
+                                  onClick={() => {
+                                    setPullRequestBranchId(branch.id);
+                                    setPullRequestTitle(`Review: ${branch.name}`);
+                                    setPullRequestDescription("");
+                                    setSnapshotError(null);
+                                  }}
+                                  disabled={branchMerging || hasUnsavedChanges}
+                                  className="rounded-lg border border-violet-700/60 bg-violet-950/30 px-3 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-900/50 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Open PR
+                                </button>
+                                <button
+                                  onClick={() => void handleOpenBranchReview(branch)
                                 disabled={branchMerging || hasUnsavedChanges}
                                 className="rounded-lg border border-emerald-700/60 bg-emerald-950/30 px-3 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-50"
                               >
@@ -2152,6 +2231,75 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                 </div>
               )}
             </div>
+
+            <div className="mb-6 rounded-xl border border-violet-900/50 bg-violet-950/20 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-100">Architecture Pull Requests</h4>
+                  <p className="mt-1 text-xs text-slate-500">Review records for branch proposals. Merge still uses the existing safe fast-forward workflow.</p>
+                </div>
+                <span className="rounded-md bg-violet-950/60 px-2 py-1 text-xs text-violet-200">{pullRequests.filter((item) => item.status === "open").length} open</span>
+              </div>
+
+              {pullRequestsLoading ? (
+                <p className="text-sm text-slate-400">Loading pull requests…</p>
+              ) : pullRequests.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-slate-700 p-3 text-sm text-slate-500">No pull requests yet. Open one from an active branch above.</p>
+              ) : (
+                <div className="space-y-2">
+                  {pullRequests.map((pullRequest) => {
+                    const branch = branches.find((item) => item.id === pullRequest.sourceBranchId);
+                    return (
+                      <div key={pullRequest.id} className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-medium text-slate-100">{pullRequest.title}</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {pullRequest.sourceBranchName} · {pullRequest.id.slice(0, 8)} · <span className="capitalize">{pullRequest.status}</span>
+                            </p>
+                            {pullRequest.description && <p className="mt-1 text-xs text-slate-400">{pullRequest.description}</p>}
+                          </div>
+                          {pullRequest.status === "open" && branch?.status === "active" && (
+                            <button
+                              onClick={() => void handleOpenBranchReview(branch)}
+                              disabled={branchReviewLoading || branchMerging || hasUnsavedChanges}
+                              className="shrink-0 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+                            >
+                              Review
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {pullRequestBranchId && (
+              <div className="mb-6 rounded-xl border border-violet-900/50 bg-slate-950/60 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-slate-100">Open Pull Request</h4>
+                  <button onClick={() => setPullRequestBranchId("")} className="text-xs text-slate-500 hover:text-slate-300">Cancel</button>
+                </div>
+                <label className="mb-1 block text-xs text-slate-400">Title</label>
+                <input value={pullRequestTitle} onChange={(event) => setPullRequestTitle(event.target.value)} maxLength={120} className="mb-3 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100" />
+                <label className="mb-1 block text-xs text-slate-400">Description</label>
+                <textarea value={pullRequestDescription} onChange={(event) => setPullRequestDescription(event.target.value)} maxLength={500} rows={3} className="mb-3 w-full resize-y rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100" />
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => {
+                      const branch = branches.find((item) => item.id === pullRequestBranchId);
+                      if (branch) void handleCreatePullRequest(branch);
+                    }}
+                    disabled={pullRequestCreating}
+                    className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
+                  >
+                    {pullRequestCreating ? "Opening..." : "Open Pull Request"}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3">
               <h4 className="text-sm font-semibold text-slate-200">Saved snapshots</h4>
