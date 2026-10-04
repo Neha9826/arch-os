@@ -105,6 +105,39 @@ service cloud.firestore {
         allow delete: if isParentArchitectureOwner();
       }
 
+      // Commits are immutable architecture history entries. A commit captures
+      // semantic IR plus the canvas state at a point in time.
+      match /commits/{commitId} {
+        function isParentArchitectureOwner() {
+          return isSignedIn()
+            && exists(/databases/$(database)/documents/architectures/$(architectureId))
+            && get(/databases/$(database)/documents/architectures/$(architectureId)).data.ownerId == request.auth.uid;
+        }
+
+        allow get, list: if isParentArchitectureOwner();
+
+        allow create: if isParentArchitectureOwner()
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.architectureId == architectureId
+          && request.resource.data.workspaceId == get(/databases/$(database)/documents/architectures/$(architectureId)).data.workspaceId
+          && request.resource.data.message is string
+          && request.resource.data.message.size() > 0
+          && request.resource.data.message.size() <= 200
+          && request.resource.data.architectureIR is map
+          && request.resource.data.canvasLayout is map
+          && (
+            !request.resource.data.keys().hasAll(['parentCommitId'])
+            || (
+              request.resource.data.parentCommitId is string
+              && exists(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.parentCommitId))
+              && get(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.parentCommitId)).data.ownerId == request.auth.uid
+            )
+          );
+
+        allow update, delete: if false;
+      }
+
       // Branches are mutable working copies created from a saved snapshot.
       match /branches/{branchId} {
         function isParentArchitectureOwner() {
