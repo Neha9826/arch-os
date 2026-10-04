@@ -26,3 +26,10 @@ export function canCreateCommitFromParent(
 ): boolean {
   return currentHeadCommitId === parentCommitId;
 }
+
+export function isCommitHeadAdvanced(
+  previousHeadCommitId: string | undefined,
+  nextHeadCommitId: string,
+): boolean {
+  return previousHeadCommitId !== nextHeadCommitId;
+}
