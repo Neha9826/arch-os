@@ -50,7 +50,7 @@ import {
   createArchitectureCommit,
   listArchitectureCommits,
 } from "@/lib/repositories/architectureCommits";
-import type { ArchitectureCommit } from "@/domain/architecture/commits";
+import { diffArchitectureCommits, type ArchitectureCommit } from "@/domain/architecture/commits";
 import {
   isArchitectureStateUnchanged,
   type ArchitectureBranch,
@@ -135,6 +135,8 @@ function StudioEditor() {
   const [showCommitHistoryModal, setShowCommitHistoryModal] = useState(false);
   const [commits, setCommits] = useState<ArchitectureCommit[]>([]);
   const [commitsLoading, setCommitsLoading] = useState(false);
+  const [compareCommitBeforeId, setCompareCommitBeforeId] = useState("");
+  const [compareCommitAfterId, setCompareCommitAfterId] = useState("");
   const [commitMessage, setCommitMessage] = useState("");
   const [commitSaving, setCommitSaving] = useState(false);
   const [snapshots, setSnapshots] = useState<ArchitectureSnapshot[]>([]);
@@ -322,7 +324,15 @@ function StudioEditor() {
     setSaveError(null);
 
     try {
-      setCommits(await listArchitectureCommits(projectId));
+      const history = await listArchitectureCommits(projectId);
+      setCommits(history);
+      if (history.length >= 2) {
+        setCompareCommitBeforeId(history[1].id);
+        setCompareCommitAfterId(history[0].id);
+      } else {
+        setCompareCommitBeforeId("");
+        setCompareCommitAfterId("");
+      }
     } catch (error) {
       console.error("Error loading architecture commits:", error);
       setSaveError("Could not load architecture history.");
@@ -1617,11 +1627,14 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
 
       {showCommitHistoryModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[85vh] overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-4xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-5">
-              <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
-                <GitCommitHorizontal className="text-violet-300" size={20} /> Architecture History
-              </h3>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
+                  <GitCommitHorizontal className="text-violet-300" size={20} /> Architecture History
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">Immutable Main history with commit-to-commit review.</p>
+              </div>
               <button onClick={() => setShowCommitHistoryModal(false)} className="text-slate-500 hover:text-slate-300">✕</button>
             </div>
             {commitsLoading ? (
@@ -1631,23 +1644,149 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                 No commits yet. Create the first immutable baseline from Main.
               </div>
             ) : (
-              <div className="space-y-3">
-                {commits.map((commit) => (
-                  <div key={commit.id} className={`rounded-xl border p-4 ${commit.id === architectureHeadCommitId ? "border-emerald-700/60 bg-emerald-950/10" : "border-slate-800 bg-slate-950/60"}`}>
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="font-medium text-slate-100">{commit.message}</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {commit.id === architectureHeadCommitId ? "Current Main HEAD" : "Ancestor"} · {commit.id.slice(0, 8)}
-                        </p>
-                      </div>
-                      {commit.parentCommitId && (
-                        <span className="text-xs text-slate-500">parent {commit.parentCommitId.slice(0, 8)}</span>
-                      )}
-                    </div>
+              <>
+                <div className="mb-5 rounded-xl border border-violet-900/50 bg-violet-950/20 p-4">
+                  <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-100">
+                    <GitCompareArrows size={16} className="text-violet-300" /> Compare commits
+                  </h4>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className="block text-xs text-slate-400">
+                      Base commit
+                      <select
+                        value={compareCommitBeforeId}
+                        onChange={(event) => setCompareCommitBeforeId(event.target.value)}
+                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-violet-500 focus:outline-none"
+                      >
+                        {commits.map((commit) => (
+                          <option key={commit.id} value={commit.id}>{commit.message} · {commit.id.slice(0, 8)}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-xs text-slate-400">
+                      Compare with
+                      <select
+                        value={compareCommitAfterId}
+                        onChange={(event) => setCompareCommitAfterId(event.target.value)}
+                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-violet-500 focus:outline-none"
+                      >
+                        {commits.map((commit) => (
+                          <option key={commit.id} value={commit.id}>{commit.message} · {commit.id.slice(0, 8)}</option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
-                ))}
-              </div>
+                  {(() => {
+                    const before = commits.find((commit) => commit.id === compareCommitBeforeId);
+                    const after = commits.find((commit) => commit.id === compareCommitAfterId);
+                    if (!before || !after) {
+                      return <p className="mt-3 text-sm text-slate-400">Choose two commits to compare.</p>;
+                    }
+                    if (before.id === after.id) {
+                      return <p className="mt-3 text-sm text-amber-200">Choose two different commits.</p>;
+                    }
+                    const diff = diffArchitectureCommits(before, after);
+                    const total =
+                      diff.semantic.summary.componentsAdded +
+                      diff.semantic.summary.componentsRemoved +
+                      diff.semantic.summary.componentsModified +
+                      diff.semantic.summary.relationsAdded +
+                      diff.semantic.summary.relationsRemoved +
+                      diff.semantic.summary.relationsModified;
+                    const renderCommitChanges = (
+                      title: string,
+                      changes: typeof diff.semantic.components | typeof diff.semantic.relations,
+                      relation: boolean,
+                    ) => (
+                      <div className="mt-4">
+                        <h5 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</h5>
+                        {changes.length === 0 ? (
+                          <p className="text-sm text-slate-500">No {relation ? "connection" : "component"} changes.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {changes.map((change) => {
+                              const item = change.after ?? change.before;
+                              const name = relation
+                                ? formatRelationDescription(
+                                    item as ArchitectureIR["relations"][number],
+                                    change.status === "removed" ? before.architectureIR : after.architectureIR,
+                                  )
+                                : (item as ArchitectureIR["components"][number]).name;
+                              return (
+                                <div key={change.id} className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${
+                                      change.status === "added"
+                                        ? "border-emerald-900/60 bg-emerald-950/30 text-emerald-200"
+                                        : change.status === "removed"
+                                          ? "border-red-900/60 bg-red-950/30 text-red-200"
+                                          : "border-amber-900/60 bg-amber-950/30 text-amber-200"
+                                    }`}>{change.status}</span>
+                                    <span className="text-sm text-slate-100">{name}</span>
+                                  </div>
+                                  {change.changedFields.length > 0 && (
+                                    <p className="mt-1 text-xs text-slate-400">Changed: {change.changedFields.join(", ")}</p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                    return (
+                      <div className="mt-4 border-t border-slate-800 pt-4">
+                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
+                          {[
+                            ["Components +", diff.semantic.summary.componentsAdded],
+                            ["Components −", diff.semantic.summary.componentsRemoved],
+                            ["Components ~", diff.semantic.summary.componentsModified],
+                            ["Relations +", diff.semantic.summary.relationsAdded],
+                            ["Relations −", diff.semantic.summary.relationsRemoved],
+                            ["Relations ~", diff.semantic.summary.relationsModified],
+                            ["Canvas", diff.canvasChanged ? "Changed" : "Same"],
+                          ].map(([label, value]) => (
+                            <div key={label} className="rounded-lg bg-slate-900 p-2 text-center">
+                              <p className="text-sm font-semibold text-slate-100">{value}</p>
+                              <p className="text-[10px] text-slate-400">{label}</p>
+                            </div>
+                          ))}
+                        </div>
+                        {total === 0 && !diff.canvasChanged ? (
+                          <p className="mt-4 text-sm text-emerald-200">No semantic or canvas changes between these commits.</p>
+                        ) : (
+                          <>
+                            {renderCommitChanges("Component changes", diff.semantic.components, false)}
+                            {renderCommitChanges("Connection changes", diff.semantic.relations, true)}
+                            <p className="mt-4 text-xs text-slate-500">
+                              {diff.canvasChanged
+                                ? "Canvas layout or visual metadata changed between these commits."
+                                : "Canvas layout and visual metadata are unchanged."}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="space-y-3">
+                  {commits.map((commit) => (
+                    <div key={commit.id} className={`rounded-xl border p-4 ${commit.id === architectureHeadCommitId ? "border-emerald-700/60 bg-emerald-950/10" : "border-slate-800 bg-slate-950/60"}`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="font-medium text-slate-100">{commit.message}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {commit.id === architectureHeadCommitId ? "Current Main HEAD" : "Ancestor"} · {commit.id.slice(0, 8)}
+                          </p>
+                        </div>
+                        {commit.parentCommitId && (
+                          <span className="text-xs text-slate-500">parent {commit.parentCommitId.slice(0, 8)}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </div>
