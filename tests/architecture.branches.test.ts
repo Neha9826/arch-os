@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { evaluateFastForwardMerge } from "@/domain/architecture/branches";
+import {
+  evaluateFastForwardMerge,
+  isArchitectureStateUnchanged,
+} from "@/domain/architecture/branches";
+import type { ReactFlowArchitectureState } from "@/domain/architecture/reactFlowAdapter";
 import type { ArchitectureIR } from "@/domain/architecture/types";
 
 const base: ArchitectureIR = {
@@ -8,6 +12,23 @@ const base: ArchitectureIR = {
     { id: "api", kind: "service", name: "API" },
   ],
   relations: [],
+};
+
+const baseLayout: ReactFlowArchitectureState = {
+  nodes: [],
+  edges: [],
+};
+
+const changedLayout: ReactFlowArchitectureState = {
+  nodes: [
+    {
+      id: "api",
+      type: "tech",
+      position: { x: 100, y: 100 },
+      data: { label: "API" },
+    },
+  ],
+  edges: [],
 };
 
 const changed: ArchitectureIR = {
@@ -30,6 +51,18 @@ describe("Architecture branch merge evaluation", () => {
       status: "conflict",
       reason: "main-changed-since-base",
     });
+  });
+
+  test("treats layout changes as Main changes", () => {
+    expect(
+      isArchitectureStateUnchanged(base, base, baseLayout, changedLayout),
+    ).toBe(false);
+  });
+
+  test("accepts identical semantic and layout state", () => {
+    expect(
+      isArchitectureStateUnchanged(base, base, baseLayout, baseLayout),
+    ).toBe(true);
   });
 
   test("rejects non-active branches", () => {
