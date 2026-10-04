@@ -47,6 +47,11 @@ import {
   mergeArchitectureBranch,
 } from "@/lib/repositories/architectureBranches";
 import {
+  createArchitectureCommit,
+  listArchitectureCommits,
+} from "@/lib/repositories/architectureCommits";
+import type { ArchitectureCommit } from "@/domain/architecture/commits";
+import {
   isArchitectureStateUnchanged,
   type ArchitectureBranch,
 } from "@/domain/architecture/branches";
@@ -68,6 +73,7 @@ import {
   Camera,
   Eye,
   GitCompareArrows,
+  GitCommitHorizontal,
 } from "lucide-react";
 
 const nodeTypes = {
@@ -125,6 +131,12 @@ function StudioEditor() {
   const [showAIReviewModal, setShowAIReviewModal] = useState(false);
   const [showLintModal, setShowLintModal] = useState(false);
   const [showSnapshotsModal, setShowSnapshotsModal] = useState(false);
+  const [showCommitModal, setShowCommitModal] = useState(false);
+  const [showCommitHistoryModal, setShowCommitHistoryModal] = useState(false);
+  const [commits, setCommits] = useState<ArchitectureCommit[]>([]);
+  const [commitsLoading, setCommitsLoading] = useState(false);
+  const [commitMessage, setCommitMessage] = useState("");
+  const [commitSaving, setCommitSaving] = useState(false);
   const [snapshots, setSnapshots] = useState<ArchitectureSnapshot[]>([]);
   const [snapshotName, setSnapshotName] = useState("");
   const [snapshotMessage, setSnapshotMessage] = useState("");
@@ -766,6 +778,72 @@ function StudioEditor() {
     }
   };
 
+  const openCommitHistory = async () => {
+    if (isNewProject) {
+      setSaveError("Save this architecture before creating commits.");
+      return;
+    }
+
+    setShowCommitHistoryModal(true);
+    setCommitsLoading(true);
+    try {
+      setCommits(await listArchitectureCommits(projectId));
+    } catch (error) {
+      console.error("Error loading architecture commits:", error);
+      setSaveError("Could not load architecture history.");
+    } finally {
+      setCommitsLoading(false);
+    }
+  };
+
+  const handleCreateCommit = async () => {
+    if (!user || isNewProject || selectedBranchId || commitSaving) return;
+
+    const message = commitMessage.trim();
+    if (!message) {
+      setSaveError("Enter a commit message.");
+      return;
+    }
+
+    setCommitSaving(true);
+    setSaveError(null);
+    try {
+      const workspace = await ensurePersonalWorkspace(user.uid);
+      const resolvedWorkspaceId = workspaceId || workspace.id;
+      const architectureIR = reactFlowToArchitectureIR({ nodes, edges });
+      const canvasLayout = architectureIRToReactFlow(architectureIR, { nodes, edges });
+      const latestCommit = commits[0];
+
+      await createArchitectureCommit({
+        architectureId: projectId,
+        workspaceId: resolvedWorkspaceId,
+        ownerId: user.uid,
+        createdBy: user.uid,
+        message,
+        parentCommitId: latestCommit?.id,
+        architectureIR,
+        canvasLayout,
+      });
+
+      setCommitMessage("");
+      setHasUnsavedChanges(false);
+      setSaveNotice("Architecture commit created.");
+      setShowCommitModal(false);
+      setCommits(await listArchitectureCommits(projectId));
+    } catch (error) {
+      console.error("Error creating architecture commit:", error);
+      setSaveError(
+        getFirestoreErrorCode(error) === "permission-denied"
+          ? "Permission denied. Save the architecture and confirm you own its workspace."
+          : error instanceof Error
+            ? error.message
+            : "Could not create the architecture commit.",
+      );
+    } finally {
+      setCommitSaving(false);
+    }
+  };
+
   const handleCreateSnapshot = async () => {
     if (!user || isNewProject || snapshotSaving) return;
 
@@ -1208,6 +1286,20 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
           >
             <History size={16} /> Snapshots
           </button>
+          <button
+            onClick={() => void openCommitHistory()}
+            disabled={isNewProject}
+            className="text-violet-300 hover:text-violet-200 border border-violet-900/50 hover:bg-violet-950/30 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            <GitCommitHorizontal size={16} /> History
+          </button>
+          <button
+            onClick={() => setShowCommitModal(true)}
+            disabled={isNewProject || selectedBranchId !== ""}
+            className="text-emerald-300 hover:text-emerald-200 border border-emerald-900/50 hover:bg-emerald-950/30 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            <GitCommitHorizontal size={16} /> Commit
+          </button>
 
           <button
             onClick={runArchitectureLint}
@@ -1459,6 +1551,84 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                 Save to Cloud
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showCommitModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
+                <GitCommitHorizontal className="text-emerald-300" size={20} /> Commit Architecture
+              </h3>
+              <button onClick={() => setShowCommitModal(false)} className="text-slate-500 hover:text-slate-300">✕</button>
+            </div>
+            <p className="text-sm text-slate-400 mb-4">
+              Create an immutable point in the architecture history. This records the current Main architecture; branch commits are intentionally disabled for this milestone.
+            </p>
+            {commits[0] && (
+              <p className="text-xs text-slate-500 mb-3">
+                Parent: <span className="text-slate-300">{commits[0].message}</span>
+              </p>
+            )}
+            <label className="block text-xs text-slate-400 mb-1">Commit message</label>
+            <input
+              value={commitMessage}
+              onChange={(event) => setCommitMessage(event.target.value)}
+              maxLength={200}
+              placeholder="e.g. Add payment service"
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
+              autoFocus
+            />
+            <div className="flex justify-end gap-3 mt-5">
+              <button onClick={() => setShowCommitModal(false)} className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:bg-slate-800">Cancel</button>
+              <button
+                onClick={() => void handleCreateCommit()}
+                disabled={commitSaving || !commitMessage.trim()}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+              >
+                {commitSaving ? "Committing..." : "Create Commit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCommitHistoryModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
+                <GitCommitHorizontal className="text-violet-300" size={20} /> Architecture History
+              </h3>
+              <button onClick={() => setShowCommitHistoryModal(false)} className="text-slate-500 hover:text-slate-300">✕</button>
+            </div>
+            {commitsLoading ? (
+              <p className="text-sm text-slate-400">Loading commit history...</p>
+            ) : commits.length === 0 ? (
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 text-sm text-slate-400">
+                No commits yet. Create the first immutable baseline from Main.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {commits.map((commit, index) => (
+                  <div key={commit.id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="font-medium text-slate-100">{commit.message}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {index === 0 ? "Current history head" : "Ancestor"} · {commit.id.slice(0, 8)}
+                        </p>
+                      </div>
+                      {commit.parentCommitId && (
+                        <span className="text-xs text-slate-500">parent {commit.parentCommitId.slice(0, 8)}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
