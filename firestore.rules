@@ -50,7 +50,15 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.ownerId == resource.data.ownerId
         && (
-          request.resource.data.headCommitId == resource.data.headCommitId
+          (
+            !resource.data.keys().hasAll(['headCommitId'])
+            && !request.resource.data.keys().hasAll(['headCommitId'])
+          )
+          || (
+            resource.data.keys().hasAll(['headCommitId'])
+            && request.resource.data.keys().hasAll(['headCommitId'])
+            && request.resource.data.headCommitId == resource.data.headCommitId
+          )
           || (
             request.resource.data.headCommitId is string
             && exists(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId))
