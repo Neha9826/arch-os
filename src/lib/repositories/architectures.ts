@@ -33,6 +33,8 @@ export type Architecture = {
     edges: Edge[];
   };
   architectureIR?: ArchitectureIR;
+  /** Explicit immutable-history pointer for Main. */
+  headCommitId?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
 };
@@ -56,6 +58,7 @@ function toArchitecture(id: string, data: Record<string, unknown>): Architecture
     architectureIR: isValidArchitectureIR(data.architectureIR)
       ? data.architectureIR
       : undefined,
+    headCommitId: typeof data.headCommitId === "string" ? data.headCommitId : undefined,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };
