@@ -413,6 +413,90 @@ describe("Architecture branch security rules", () => {
     );
   });
 
+  test("owner can close an active branch but cannot mutate it after closing", async () => {
+    await seedBranchSnapshot();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "architectures", architectureA, "branches", "branch-a"),
+        {
+          architectureId: architectureA,
+          workspaceId: workspaceA,
+          ownerId: userA.uid,
+          createdBy: userA.uid,
+          name: "feature/lifecycle",
+          description: "",
+          baseSnapshotId: "snapshot-a",
+          status: "active",
+          architectureIR: { schemaVersion: 1, components: [], relations: [] },
+          canvasLayout: { nodes: [], edges: [] },
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      );
+    });
+
+    const db = authenticatedDb(userA);
+    const branchRef = doc(db, "architectures", architectureA, "branches", "branch-a");
+
+    await assertSucceeds(updateDoc(branchRef, {
+      name: "feature/lifecycle",
+      description: "",
+      status: "abandoned",
+      architectureIR: { schemaVersion: 1, components: [], relations: [] },
+      canvasLayout: { nodes: [], edges: [] },
+    }));
+
+    await assertFails(updateDoc(branchRef, {
+      name: "reopened",
+      description: "",
+      status: "active",
+      architectureIR: { schemaVersion: 1, components: [], relations: [] },
+      canvasLayout: { nodes: [], edges: [] },
+    }));
+
+    await assertFails(updateDoc(branchRef, {
+      name: "tampered",
+      description: "",
+      status: "abandoned",
+      architectureIR: { schemaVersion: 1, components: [], relations: [] },
+      canvasLayout: { nodes: [], edges: [] },
+    }));
+
+    await assertFails(deleteDoc(branchRef));
+  });
+
+  test("owner cannot modify or delete a merged branch", async () => {
+    await seedBranchSnapshot();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "architectures", architectureA, "branches", "branch-a"),
+        {
+          architectureId: architectureA,
+          workspaceId: workspaceA,
+          ownerId: userA.uid,
+          createdBy: userA.uid,
+          name: "feature/merged",
+          description: "",
+          baseSnapshotId: "snapshot-a",
+          status: "merged",
+          architectureIR: { schemaVersion: 1, components: [], relations: [] },
+          canvasLayout: { nodes: [], edges: [] },
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      );
+    });
+
+    const db = authenticatedDb(userA);
+    const branchRef = doc(db, "architectures", architectureA, "branches", "branch-a");
+    await assertFails(updateDoc(branchRef, {
+      name: "tampered",
+      description: "",
+      status: "merged",
+      architectureIR: { schemaVersion: 1, components: [], relations: [] },
+      canvasLayout: { nodes: [], edges: [] },
+    }));
+    await assertFails(deleteDoc(branchRef));
+  });
+
   test("another user cannot read, update, or delete a branch", async () => {
     await seedBranchSnapshot();
     await testEnv.withSecurityRulesDisabled(async (context) => {
