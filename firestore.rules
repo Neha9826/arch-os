@@ -61,16 +61,15 @@ service cloud.firestore {
           )
           || (
             request.resource.data.headCommitId is string
-            && exists(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId))
-            && get(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.ownerId == request.auth.uid
+            && getAfter(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.ownerId == request.auth.uid
             && (
               (
                 !resource.data.keys().hasAll(['headCommitId'])
-                && !get(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.keys().hasAll(['parentCommitId'])
+                && !getAfter(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.keys().hasAll(['parentCommitId'])
               )
               || (
                 resource.data.keys().hasAll(['headCommitId'])
-                && get(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.parentCommitId == resource.data.headCommitId
+                && getAfter(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.parentCommitId == resource.data.headCommitId
               )
             )
             && getAfter(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.createdAt == request.time
