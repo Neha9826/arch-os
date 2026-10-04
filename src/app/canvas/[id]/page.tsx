@@ -44,7 +44,12 @@ import {
   listArchitectureBranches,
   updateArchitectureBranch,
 } from "@/lib/repositories/architectureBranches";
-import type { ArchitectureBranch } from "@/domain/architecture/branches";
+import {
+  evaluateFastForwardMerge,
+  type ArchitectureBranch,
+} from "@/domain/architecture/branches";
+import type { ArchitectureIR } from "@/domain/architecture/types";
+import type { ReactFlowArchitectureState } from "@/domain/architecture/reactFlowAdapter";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -140,6 +145,12 @@ function StudioEditor() {
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [selectedBranchId, setSelectedBranchId] = useState("");
   const [branchMerging, setBranchMerging] = useState(false);
+  const [showBranchReviewModal, setShowBranchReviewModal] = useState(false);
+  const [reviewingBranch, setReviewingBranch] = useState<ArchitectureBranch | null>(null);
+  const [reviewingBaseSnapshot, setReviewingBaseSnapshot] = useState<ArchitectureSnapshot | null>(null);
+  const [reviewingMainIR, setReviewingMainIR] = useState<ArchitectureIR | null>(null);
+  const [reviewingMainLayout, setReviewingMainLayout] = useState<ReactFlowArchitectureState | null>(null);
+  const [branchReviewLoading, setBranchReviewLoading] = useState(false);
   const [lintResult, setLintResult] = useState<ArchitectureLintResult | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
@@ -426,6 +437,65 @@ function StudioEditor() {
     }
   };
 
+  const handleOpenBranchReview = async (branch: ArchitectureBranch) => {
+    if (!user || isNewProject || branchReviewLoading || branchMerging) return;
+    if (branch.status !== "active") {
+      setSaveError("Only active branches can be reviewed for merge.");
+      return;
+    }
+    if (hasUnsavedChanges) {
+      setSaveError("Save your current changes before reviewing a branch merge.");
+      return;
+    }
+
+    setBranchReviewLoading(true);
+    setSaveError(null);
+    setSaveNotice(null);
+
+    try {
+      const [{ getArchitectureBranch }, architecture] = await Promise.all([
+        import("@/lib/repositories/architectureBranches"),
+        getArchitecture(projectId),
+      ]);
+      const latestBranch = await getArchitectureBranch(projectId, branch.id);
+
+      if (!latestBranch || latestBranch.status !== "active") {
+        throw new Error("This branch is no longer active.");
+      }
+      if (!architecture || architecture.ownerId !== user.uid) {
+        throw new Error("Architecture not found or access denied.");
+      }
+
+      const baseSnapshot = snapshots.find((item) => item.id === latestBranch.baseSnapshotId);
+      if (!baseSnapshot) {
+        throw new Error("The branch base snapshot is unavailable. Refresh snapshots and try again.");
+      }
+
+      const mainLayout = architecture.canvasLayout ?? {
+        nodes: architecture.nodes,
+        edges: architecture.edges,
+      };
+      const mainIR = architecture.architectureIR ?? reactFlowToArchitectureIR(mainLayout);
+
+      setReviewingBranch(latestBranch);
+      setReviewingBaseSnapshot(baseSnapshot);
+      setReviewingMainIR(mainIR);
+      setReviewingMainLayout(mainLayout);
+      setShowBranchReviewModal(true);
+    } catch (error) {
+      console.error("Error preparing branch review:", error);
+      setSaveError(
+        getFirestoreErrorCode(error) === "permission-denied"
+          ? "Permission denied. The branch could not be reviewed."
+          : error instanceof Error
+            ? error.message
+            : "Could not prepare the branch review.",
+      );
+    } finally {
+      setBranchReviewLoading(false);
+    }
+  };
+
   const handleMergeBranch = async (branch: ArchitectureBranch) => {
     if (!user || isNewProject || branchMerging) return;
     if (branch.status !== "active") {
@@ -438,11 +508,6 @@ function StudioEditor() {
       setSaveError("The branch base snapshot is unavailable. Refresh snapshots and try again.");
       return;
     }
-
-    const confirmed = window.confirm(
-      `Merge "${branch.name}" into the main architecture? This uses a safe fast-forward merge and will not overwrite main if main changed since the branch base.`,
-    );
-    if (!confirmed) return;
 
     setBranchMerging(true);
     setSaveError(null);
@@ -460,8 +525,19 @@ function StudioEditor() {
       };
       const mainIR = architecture.architectureIR ?? reactFlowToArchitectureIR(mainLayout);
 
-      if (JSON.stringify(mainIR) !== JSON.stringify(baseSnapshot.architectureIR)) {
-        setSaveError("Merge stopped: the main architecture changed after this branch was created. Create a new branch or resolve the changes manually.");
+      const mergeEvaluation = evaluateFastForwardMerge(
+        baseSnapshot.architectureIR,
+        mainIR,
+        branch.architectureIR,
+        branch.status,
+      );
+
+      if (mergeEvaluation.status !== "merged") {
+        setSaveError(
+          mergeEvaluation.status === "conflict"
+            ? "Merge stopped: Main changed after this branch was created. Review the latest Main and branch differences before merging."
+            : "Only active branches can be merged.",
+        );
         return;
       }
 
@@ -499,6 +575,11 @@ function StudioEditor() {
         ),
       );
       setHasUnsavedChanges(false);
+      setReviewingBranch(null);
+      setReviewingBaseSnapshot(null);
+      setReviewingMainIR(null);
+      setReviewingMainLayout(null);
+      setShowBranchReviewModal(false);
       setSaveNotice(`Branch merged: ${branch.name}`);
     } catch (error) {
       console.error("Error merging branch:", error);
@@ -1640,11 +1721,11 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                             </span>
                             {branch.status === "active" && (
                               <button
-                                onClick={() => void handleMergeBranch(branch)}
+                                onClick={() => void handleOpenBranchReview(branch)}
                                 disabled={branchMerging || hasUnsavedChanges}
                                 className="rounded-lg border border-emerald-700/60 bg-emerald-950/30 px-3 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                {branchMerging ? "Merging..." : "Merge to Main"}
+                                {branchReviewLoading ? "Reviewing..." : "Review & Merge"}
                               </button>
                             )}
                           </div>
