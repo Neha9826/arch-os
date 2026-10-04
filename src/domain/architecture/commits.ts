@@ -21,8 +21,8 @@ export function isValidCommitMessage(message: string): boolean {
 }
 
 export function canCreateCommitFromParent(
+  currentHeadCommitId: string | undefined,
   parentCommitId: string | undefined,
-  commits: Set<string>,
 ): boolean {
-  return !parentCommitId || commits.has(parentCommitId);
+  return currentHeadCommitId === parentCommitId;
 }
