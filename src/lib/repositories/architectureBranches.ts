@@ -1,7 +1,6 @@
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -9,7 +8,6 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  updateDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { ArchitectureIR } from "@/domain/architecture/types";
@@ -18,6 +16,7 @@ import {
   isValidArchitectureIR,
 } from "@/domain/architecture/validation";
 import {
+  canTransitionBranchStatus,
   isArchitectureStateUnchanged,
   type ArchitectureBranch,
   type ArchitectureBranchStatus,
@@ -164,32 +163,65 @@ export async function updateArchitectureBranch(input: {
 
   assertValidArchitectureIR(input.architectureIR);
 
-  await updateDoc(
-    doc(
-      db,
-      "architectures",
-      input.architectureId,
-      BRANCHES_SUBCOLLECTION,
-      input.branchId,
-    ),
-    {
+  const branchRef = doc(
+    db,
+    "architectures",
+    input.architectureId,
+    BRANCHES_SUBCOLLECTION,
+    input.branchId,
+  );
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(branchRef);
+    if (!snapshot.exists()) {
+      throw new Error("Branch not found.");
+    }
+
+    const current = toBranch(snapshot.id, snapshot.data());
+    const nextStatus = input.status ?? current.status;
+
+    if (!canTransitionBranchStatus(current.status, nextStatus)) {
+      throw new Error(
+        "Branch is " + current.status + " and cannot be modified.",
+      );
+    }
+
+    transaction.update(branchRef, {
       name,
       description: input.description?.trim() || "",
-      ...(input.status ? { status: input.status } : {}),
+      status: nextStatus,
       architectureIR: toFirestoreSafe(input.architectureIR),
       canvasLayout: toFirestoreSafe(input.canvasLayout),
       updatedAt: serverTimestamp(),
-    },
-  );
+    });
+  });
 }
 
 export async function deleteArchitectureBranch(
   architectureId: string,
   branchId: string,
 ): Promise<void> {
-  await deleteDoc(
-    doc(db, "architectures", architectureId, BRANCHES_SUBCOLLECTION, branchId),
+  const branchRef = doc(
+    db,
+    "architectures",
+    architectureId,
+    BRANCHES_SUBCOLLECTION,
+    branchId,
   );
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(branchRef);
+    if (!snapshot.exists()) return;
+
+    const branch = toBranch(snapshot.id, snapshot.data());
+    if (branch.status !== "active") {
+      throw new Error(
+        "Branch is " + branch.status + " and cannot be deleted.",
+      );
+    }
+
+    transaction.delete(branchRef);
+  });
 }
 
 
