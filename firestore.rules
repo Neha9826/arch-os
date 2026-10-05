@@ -1,0 +1,309 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isWorkspaceOwner(workspaceId) {
+      return exists(/databases/$(database)/documents/workspaces/$(workspaceId))
+        && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
+    }
+
+    function hasWorkspace(data) {
+      return data.keys().hasAll(['workspaceId']);
+    }
+
+    match /workspaces/{workspaceId} {
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid;
+
+      // Allow a user to probe their deterministic personal-workspace ID when it
+      // does not exist yet; a missing document discloses no workspace data.
+      allow get: if isSignedIn()
+        && (
+          !exists(/databases/$(database)/documents/workspaces/$(workspaceId))
+          || resource.data.ownerId == request.auth.uid
+        );
+
+      allow list, delete: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid;
+
+      allow update: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId;
+    }
+
+    match /architectures/{architectureId} {
+      // Existing owner-only documents predate the workspace model. They remain
+      // available to their owner and may be associated with a workspace on save.
+      allow get, list: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && hasWorkspace(request.resource.data)
+        && isWorkspaceOwner(request.resource.data.workspaceId);
+
+      allow update: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId
+        && (
+          (
+            !resource.data.keys().hasAll(['headCommitId'])
+            && !request.resource.data.keys().hasAll(['headCommitId'])
+          )
+          || (
+            resource.data.keys().hasAll(['headCommitId'])
+            && request.resource.data.keys().hasAll(['headCommitId'])
+            && request.resource.data.headCommitId == resource.data.headCommitId
+          )
+          || (
+            request.resource.data.headCommitId is string
+            && getAfter(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.ownerId == request.auth.uid
+            && (
+              (
+                !resource.data.keys().hasAll(['headCommitId'])
+                && !getAfter(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.keys().hasAll(['parentCommitId'])
+              )
+              || (
+                resource.data.keys().hasAll(['headCommitId'])
+                && getAfter(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.parentCommitId == resource.data.headCommitId
+              )
+            )
+            && getAfter(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.createdAt == request.time
+            && getAfter(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.architectureIR == request.resource.data.architectureIR
+            && getAfter(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.headCommitId)).data.canvasLayout == request.resource.data.canvasLayout
+          )
+        )
+        && (
+          (
+            hasWorkspace(resource.data)
+            && request.resource.data.workspaceId == resource.data.workspaceId
+            && isWorkspaceOwner(resource.data.workspaceId)
+          )
+          || (
+            !hasWorkspace(resource.data)
+            && (
+              !hasWorkspace(request.resource.data)
+              || isWorkspaceOwner(request.resource.data.workspaceId)
+            )
+          )
+        );
+
+      allow delete: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid;
+
+      // Snapshots are immutable: owners may create and read them, but cannot
+      // update or delete a historical version.
+      match /snapshots/{snapshotId} {
+        function isParentArchitectureOwner() {
+          return isSignedIn()
+            && exists(/databases/$(database)/documents/architectures/$(architectureId))
+            && get(/databases/$(database)/documents/architectures/$(architectureId)).data.ownerId == request.auth.uid;
+        }
+
+        allow get, list: if isParentArchitectureOwner();
+
+        allow create: if isParentArchitectureOwner()
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.architectureId == architectureId
+          && request.resource.data.workspaceId == get(/databases/$(database)/documents/architectures/$(architectureId)).data.workspaceId
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.architectureIR is map
+          && request.resource.data.canvasLayout is map;
+
+        allow update: if isParentArchitectureOwner()
+          && request.resource.data.architectureId == resource.data.architectureId
+          && request.resource.data.workspaceId == resource.data.workspaceId
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.architectureIR == resource.data.architectureIR
+          && request.resource.data.canvasLayout == resource.data.canvasLayout
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 100
+          && request.resource.data.message is string
+          && request.resource.data.message.size() <= 500;
+
+        allow delete: if isParentArchitectureOwner();
+      }
+
+      // Commits are immutable architecture history entries. A commit captures
+      // semantic IR plus the canvas state at a point in time.
+      match /commits/{commitId} {
+        function isParentArchitectureOwner() {
+          return isSignedIn()
+            && exists(/databases/$(database)/documents/architectures/$(architectureId))
+            && get(/databases/$(database)/documents/architectures/$(architectureId)).data.ownerId == request.auth.uid;
+        }
+
+        allow get, list: if isParentArchitectureOwner();
+
+        allow create: if isParentArchitectureOwner()
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.architectureId == architectureId
+          && request.resource.data.workspaceId == get(/databases/$(database)/documents/architectures/$(architectureId)).data.workspaceId
+          && request.resource.data.message is string
+          && request.resource.data.message.size() > 0
+          && request.resource.data.message.size() <= 200
+          && request.resource.data.architectureIR is map
+          && request.resource.data.canvasLayout is map
+          && request.resource.data.createdAt == request.time
+          && getAfter(/databases/$(database)/documents/architectures/$(architectureId)).data.headCommitId == commitId
+          && (
+            (
+              !request.resource.data.keys().hasAll(['parentCommitId'])
+              && !get(/databases/$(database)/documents/architectures/$(architectureId)).data.keys().hasAll(['headCommitId'])
+            )
+            || (
+              request.resource.data.parentCommitId is string
+              && get(/databases/$(database)/documents/architectures/$(architectureId)).data.headCommitId == request.resource.data.parentCommitId
+              && exists(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.parentCommitId))
+              && get(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.parentCommitId)).data.ownerId == request.auth.uid
+              && get(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.parentCommitId)).data.architectureId == architectureId
+              && get(/databases/$(database)/documents/architectures/$(architectureId)/commits/$(request.resource.data.parentCommitId)).data.workspaceId == request.resource.data.workspaceId
+            )
+          );
+
+        allow update, delete: if false;
+      }
+
+      // Pull requests are owner-scoped review records tied to an architecture branch.
+      match /pullRequests/{pullRequestId} {
+        function isParentArchitectureOwner() {
+          return isSignedIn()
+            && exists(/databases/$(database)/documents/architectures/$(architectureId))
+            && get(/databases/$(database)/documents/architectures/$(architectureId)).data.ownerId == request.auth.uid;
+        }
+
+        allow get, list: if isParentArchitectureOwner();
+
+        allow create: if isParentArchitectureOwner()
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.architectureId == architectureId
+          && request.resource.data.workspaceId == get(/databases/$(database)/documents/architectures/$(architectureId)).data.workspaceId
+          && request.resource.data.sourceBranchId is string
+          && request.resource.data.sourceBranchId.size() > 0
+          && exists(/databases/$(database)/documents/architectures/$(architectureId)/branches/$(request.resource.data.sourceBranchId))
+          && get(/databases/$(database)/documents/architectures/$(architectureId)/branches/$(request.resource.data.sourceBranchId)).data.ownerId == request.auth.uid
+          && get(/databases/$(database)/documents/architectures/$(architectureId)/branches/$(request.resource.data.sourceBranchId)).data.status == "active"
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 120
+          && request.resource.data.status == "open"
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && getAfter(/databases/$(database)/documents/architectures/$(architectureId)/branches/$(request.resource.data.sourceBranchId)).data.pullRequestId == pullRequestId;
+
+        allow update: if isParentArchitectureOwner()
+          && resource.data.ownerId == request.auth.uid
+          && resource.data.architectureId == architectureId
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.architectureId == resource.data.architectureId
+          && request.resource.data.workspaceId == resource.data.workspaceId
+          && request.resource.data.sourceBranchId == resource.data.sourceBranchId
+          && request.resource.data.baseSnapshotId == resource.data.baseSnapshotId
+          && request.resource.data.sourceBranchName == resource.data.sourceBranchName
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.status in ["open", "closed", "merged"]
+          && (
+            (
+              resource.data.status == "open"
+              && request.resource.data.status in ["open", "closed", "merged"]
+              && request.resource.data.title == resource.data.title
+              && request.resource.data.description == resource.data.description
+            )
+            || (
+              resource.data.status == "closed"
+              && request.resource.data.status == "open"
+              && request.resource.data.title is string
+              && request.resource.data.title.size() > 0
+              && request.resource.data.title.size() <= 120
+              && request.resource.data.description is string
+            )
+            || request.resource.data.status == resource.data.status
+          )
+          && (
+            request.resource.data.status != "open"
+            || get(/databases/$(database)/documents/architectures/$(architectureId)/branches/$(request.resource.data.sourceBranchId)).data.status == "active"
+          )
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if false;
+      }
+
+      // Branches are mutable working copies created from a saved snapshot.
+      match /branches/{branchId} {
+        function isParentArchitectureOwner() {
+          return isSignedIn()
+            && exists(/databases/$(database)/documents/architectures/$(architectureId))
+            && get(/databases/$(database)/documents/architectures/$(architectureId)).data.ownerId == request.auth.uid;
+        }
+
+        function isValidStatus(status) {
+          return status == "active"
+            || status == "merged"
+            || status == "abandoned";
+        }
+
+        allow get, list: if isParentArchitectureOwner();
+
+        allow create: if isParentArchitectureOwner()
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.architectureId == architectureId
+          && request.resource.data.workspaceId == get(/databases/$(database)/documents/architectures/$(architectureId)).data.workspaceId
+          && request.resource.data.baseSnapshotId is string
+          && request.resource.data.baseSnapshotId.size() > 0
+          && exists(/databases/$(database)/documents/architectures/$(architectureId)/snapshots/$(request.resource.data.baseSnapshotId))
+          && get(/databases/$(database)/documents/architectures/$(architectureId)/snapshots/$(request.resource.data.baseSnapshotId)).data.ownerId == request.auth.uid
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 100
+          && request.resource.data.status == "active"
+          && request.resource.data.architectureIR is map
+          && request.resource.data.canvasLayout is map
+          && request.resource.data.architectureIR == get(/databases/$(database)/documents/architectures/$(architectureId)/snapshots/$(request.resource.data.baseSnapshotId)).data.architectureIR
+          && request.resource.data.canvasLayout == get(/databases/$(database)/documents/architectures/$(architectureId)/snapshots/$(request.resource.data.baseSnapshotId)).data.canvasLayout;
+
+        allow update: if isParentArchitectureOwner()
+          && resource.data.status == "active"
+          && request.resource.data.architectureId == resource.data.architectureId
+          && request.resource.data.workspaceId == resource.data.workspaceId
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.baseSnapshotId == resource.data.baseSnapshotId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 100
+          && request.resource.data.description is string
+          && request.resource.data.description.size() <= 500
+          && isValidStatus(request.resource.data.status)
+          && (
+            !request.resource.data.keys().hasAll(['pullRequestId'])
+            || (
+              request.resource.data.pullRequestId is string
+              && get(/databases/$(database)/documents/architectures/$(architectureId)/pullRequests/$(request.resource.data.pullRequestId)).data.sourceBranchId == branchId
+              && get(/databases/$(database)/documents/architectures/$(architectureId)/pullRequests/$(request.resource.data.pullRequestId)).data.ownerId == request.auth.uid
+            )
+          )
+          && request.resource.data.architectureIR is map
+          && request.resource.data.canvasLayout is map;
+
+        // Active branches may be discarded, but terminal branches remain
+        // immutable so the architecture history stays auditable.
+        allow delete: if isParentArchitectureOwner()
+          && resource.data.status == "active";
+      }
+    }
+  }
+}

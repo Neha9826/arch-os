@@ -1,7 +1,11 @@
 import React from 'react';
-import { Handle, Position } from 'reactflow';
+import { Handle, Position, type NodeProps } from 'reactflow';
 
-export default function TechNode({ data, selected }: { data: any, selected: boolean }) {
+type TechNodeData = {
+  label: string;
+};
+
+export default function TechNode({ data, selected }: NodeProps<TechNodeData>) {
   return (
     <div 
       className={`px-4 py-3 shadow-lg rounded-lg bg-slate-800 border-2 transition-all duration-200 flex items-center min-w-[150px] justify-center
