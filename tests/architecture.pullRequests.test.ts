@@ -17,9 +17,9 @@ describe("Architecture pull request foundation", () => {
     expect(canOpenPullRequestFromBranch("active", "merged")).toBe(false);
   });
 
-  test("open pull requests support close or merge transitions", () => {
+  test("open pull requests support close but not direct merge transitions", () => {
     expect(canTransitionPullRequestStatus("open", "closed")).toBe(true);
-    expect(canTransitionPullRequestStatus("open", "merged")).toBe(true);
+    expect(canTransitionPullRequestStatus("open", "merged")).toBe(false);
     expect(canTransitionPullRequestStatus("open", "open")).toBe(true);
   });
 

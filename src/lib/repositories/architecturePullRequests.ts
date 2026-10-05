@@ -168,6 +168,12 @@ export async function updateArchitecturePullRequestStatus(input: {
     if (!snapshot.exists()) throw new Error("Pull request not found.");
 
     const current = toPullRequest(snapshot.id, snapshot.data());
+    if (input.status === "merged") {
+      throw new Error(
+        "Pull request merge must be performed through the architecture branch merge.",
+      );
+    }
+
     if (!canTransitionPullRequestStatus(current.status, input.status)) {
       throw new Error("Pull request is already closed or merged.");
     }
