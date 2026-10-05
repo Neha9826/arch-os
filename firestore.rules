@@ -78,7 +78,17 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.resource.data.ownerId == request.auth.uid
         && hasWorkspace(request.resource.data)
-        && isWorkspaceOwner(request.resource.data.workspaceId);
+        && isWorkspaceOwner(request.resource.data.workspaceId)
+        && (
+          !request.resource.data.keys().hasAll(['projectId'])
+          || (
+            request.resource.data.projectId is string
+            && exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId))
+            && get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerId == request.auth.uid
+            && get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.workspaceId == request.resource.data.workspaceId
+            && get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.status == "active"
+          )
+        );
 
       allow update: if isSignedIn()
         && resource.data.ownerId == request.auth.uid
@@ -116,6 +126,16 @@ service cloud.firestore {
             hasWorkspace(resource.data)
             && request.resource.data.workspaceId == resource.data.workspaceId
             && isWorkspaceOwner(resource.data.workspaceId)
+            && (
+              !request.resource.data.keys().hasAll(['projectId'])
+              || (
+                request.resource.data.projectId is string
+                && exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId))
+                && get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerId == request.auth.uid
+                && get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.workspaceId == request.resource.data.workspaceId
+                && get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.status == "active"
+              )
+            )
           )
           || (
             !hasWorkspace(resource.data)
