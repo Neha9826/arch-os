@@ -16,6 +16,13 @@ export const PROJECT_SECTION_KEYS = [
 
 export type ProjectSectionKey = (typeof PROJECT_SECTION_KEYS)[number];
 
+export type ProjectSectionStatus = "not-started" | "in-progress" | "complete";
+
+export type ProjectSection = {
+  key: ProjectSectionKey;
+  status: ProjectSectionStatus;
+};
+
 export type Project = {
   id: string;
   workspaceId: string;
@@ -24,6 +31,7 @@ export type Project = {
   name: string;
   description?: string;
   status: ProjectStatus;
+  sections?: Record<ProjectSectionKey, ProjectSectionStatus>;
   createdAt?: unknown;
   updatedAt?: unknown;
 };
