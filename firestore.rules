@@ -55,7 +55,24 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120
-        && request.resource.data.status == "active";
+        && request.resource.data.status == "active"
+        && request.resource.data.sections is map
+        && request.resource.data.sections.keys().size() == 11
+        && request.resource.data.sections.keys().hasAll([
+          "planning", "requirements", "roadmap", "design", "architecture",
+          "api", "database", "infrastructure", "code", "testing", "documentation"
+        ])
+        && request.resource.data.sections.planning in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.requirements in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.roadmap in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.design in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.architecture in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.api in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.database in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.infrastructure in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.code in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.testing in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.documentation in ["not-started", "in-progress", "complete"];
 
       allow update: if isProjectOwner()
         && request.resource.data.workspaceId == resource.data.workspaceId
@@ -64,7 +81,28 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120
-        && request.resource.data.status in ["active", "archived"];
+        && request.resource.data.status in ["active", "archived"]
+        && request.resource.data.sections is map
+        && request.resource.data.sections.keys().size() == 11
+        && request.resource.data.sections.keys().hasAll([
+          "planning", "requirements", "roadmap", "design", "architecture",
+          "api", "database", "infrastructure", "code", "testing", "documentation"
+        ])
+        && request.resource.data.sections.planning in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.requirements in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.roadmap in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.design in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.architecture in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.api in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.database in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.infrastructure in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.code in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.testing in ["not-started", "in-progress", "complete"]
+        && request.resource.data.sections.documentation in ["not-started", "in-progress", "complete"]
+        && (
+          resource.data.status != "archived"
+          || request.resource.data.sections == resource.data.sections
+        );
 
       allow delete: if isProjectOwner();
     }
