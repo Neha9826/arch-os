@@ -19,6 +19,9 @@ import {
   isValidProjectName,
   isProjectSectionStatus,
   isValidProjectPlanning,
+  isProjectRequirementPriority,
+  isProjectRequirementStatus,
+  isValidProjectRequirement,
 } from "@/domain/project/validation";
 import type {
   Project,
@@ -26,6 +29,9 @@ import type {
   ProjectSectionStatus,
   ProjectStatus,
   ProjectPlanning,
+  ProjectRequirement,
+  ProjectRequirementPriority,
+  ProjectRequirementStatus,
 } from "@/domain/project/types";
 
 const PROJECTS_COLLECTION = "projects";
@@ -212,4 +218,85 @@ export async function updateProjectPlanning(input: {
       updatedAt: serverTimestamp(),
     });
   });
+}
+
+
+const PROJECT_REQUIREMENTS_SUBCOLLECTION = "requirements";
+
+function toProjectRequirement(id: string, data: Record<string, unknown>): ProjectRequirement {
+  return {
+    id,
+    projectId: typeof data.projectId === "string" ? data.projectId : "",
+    ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
+    title: typeof data.title === "string" ? data.title : "",
+    description: typeof data.description === "string" ? data.description : undefined,
+    priority: isProjectRequirementPriority(data.priority) ? data.priority : "medium",
+    status: isProjectRequirementStatus(data.status) ? data.status : "todo",
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+}
+
+export async function listProjectRequirements(projectId: string, ownerId: string): Promise<ProjectRequirement[]> {
+  const projectRef = doc(db, PROJECTS_COLLECTION, projectId);
+  const project = await getDoc(projectRef);
+  if (!project.exists()) throw new Error("Project not found.");
+  if (project.data().ownerId !== ownerId) throw new Error("You do not have access to this project.");
+
+  const snapshot = await getDocs(collection(projectRef, PROJECT_REQUIREMENTS_SUBCOLLECTION));
+  return snapshot.docs.map((item) => toProjectRequirement(item.id, item.data()));
+}
+
+export async function createProjectRequirement(input: {
+  projectId: string;
+  ownerId: string;
+  title: string;
+  description?: string;
+  priority: ProjectRequirementPriority;
+}): Promise<string> {
+  const projectRef = doc(db, PROJECTS_COLLECTION, input.projectId);
+  const projectSnapshot = await getDoc(projectRef);
+  if (!projectSnapshot.exists()) throw new Error("Project not found.");
+  const project = projectSnapshot.data();
+  if (project.ownerId !== input.ownerId) throw new Error("You do not have access to this project.");
+  if (project.status !== "active") throw new Error("Archived projects are read-only.");
+
+  const requirementRef = doc(collection(projectRef, PROJECT_REQUIREMENTS_SUBCOLLECTION));
+  const requirement: ProjectRequirement = {
+    id: requirementRef.id,
+    projectId: input.projectId,
+    ownerId: input.ownerId,
+    title: input.title.trim(),
+    description: input.description?.trim() || undefined,
+    priority: input.priority,
+    status: "todo",
+  };
+  if (!isValidProjectRequirement(requirement)) throw new Error("Invalid project requirement.");
+
+  await setDoc(requirementRef, {
+    projectId: requirement.projectId,
+    ownerId: requirement.ownerId,
+    title: requirement.title,
+    ...(requirement.description ? { description: requirement.description } : {}),
+    priority: requirement.priority,
+    status: requirement.status,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return requirementRef.id;
+}
+
+export async function updateProjectRequirementStatus(input: {
+  projectId: string;
+  requirementId: string;
+  ownerId: string;
+  status: ProjectRequirementStatus;
+}): Promise<void> {
+  if (!isProjectRequirementStatus(input.status)) throw new Error("Invalid requirement status.");
+  const requirementRef = doc(db, PROJECTS_COLLECTION, input.projectId, PROJECT_REQUIREMENTS_SUBCOLLECTION, input.requirementId);
+  const snapshot = await getDoc(requirementRef);
+  if (!snapshot.exists()) throw new Error("Requirement not found.");
+  const requirement = toProjectRequirement(snapshot.id, snapshot.data());
+  if (requirement.ownerId !== input.ownerId) throw new Error("You do not have access to this requirement.");
+  await updateDoc(requirementRef, { status: input.status, updatedAt: serverTimestamp() });
 }
