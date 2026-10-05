@@ -6,7 +6,7 @@ import {
 } from "./types";
 
 const PROJECT_NAME_MAX_LENGTH = 120;
-const PROJECT_DESCRIPTION_MAX_LENGTH = 1000;
+const PROJECT_DESCRIPTION_MAX_LENGTH = 1000;\nconst PROJECT_PLANNING_FIELD_MAX_LENGTH = 5000;
 
 export function isProjectSectionKey(value: unknown): value is ProjectSectionKey {
   return (
@@ -62,6 +62,22 @@ export function assertValidProject(project: Project): void {
   if (!isValidProject(project)) {
     throw new Error("Invalid project.");
   }
+}
+
+export function isValidProjectPlanning(
+  planning: import("./types").ProjectPlanning | undefined,
+): boolean {
+  if (planning === undefined) return true;
+  return (
+    typeof planning.objective === "string" &&
+    planning.objective.length <= PROJECT_PLANNING_FIELD_MAX_LENGTH &&
+    typeof planning.scope === "string" &&
+    planning.scope.length <= PROJECT_PLANNING_FIELD_MAX_LENGTH &&
+    typeof planning.constraints === "string" &&
+    planning.constraints.length <= PROJECT_PLANNING_FIELD_MAX_LENGTH &&
+    typeof planning.successCriteria === "string" &&
+    planning.successCriteria.length <= PROJECT_PLANNING_FIELD_MAX_LENGTH
+  );
 }
 
 export function isValidProjectName(name: string): boolean {
