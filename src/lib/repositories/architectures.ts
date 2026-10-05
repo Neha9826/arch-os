@@ -25,6 +25,8 @@ export type Architecture = {
   name: string;
   ownerId: string;
   workspaceId?: string;
+  /** Optional project container link; legacy architectures remain workspace-scoped. */
+  projectId?: string;
   nodes: Array<Node<{ label: string }>>;
   edges: Edge[];
   /** React Flow presentation/layout state; Architecture IR remains the semantic source of truth. */
@@ -45,6 +47,7 @@ function toArchitecture(id: string, data: Record<string, unknown>): Architecture
     name: typeof data.name === "string" ? data.name : "Untitled Architecture",
     ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
     workspaceId: typeof data.workspaceId === "string" ? data.workspaceId : undefined,
+    projectId: typeof data.projectId === "string" ? data.projectId : undefined,
     nodes: Array.isArray(data.nodes)
       ? (data.nodes as Array<Node<{ label: string }>>)
       : [],
@@ -96,6 +99,7 @@ export async function createArchitecture(input: {
   name: string;
   ownerId: string;
   workspaceId: string;
+  projectId?: string;
   nodes: Array<Node<{ label: string }>>;
   edges: Edge[];
   canvasLayout: { nodes: Array<Node<{ label: string }>>; edges: Edge[] };
@@ -107,6 +111,7 @@ export async function createArchitecture(input: {
     name: input.name,
     ownerId: input.ownerId,
     workspaceId: input.workspaceId,
+    ...(input.projectId ? { projectId: input.projectId } : {}),
     nodes: toFirestoreSafe(input.nodes),
     edges: toFirestoreSafe(input.edges),
     canvasLayout: toFirestoreSafe(input.canvasLayout),
@@ -122,6 +127,7 @@ export async function updateArchitecture(input: {
   id: string;
   name: string;
   workspaceId?: string;
+  projectId?: string;
   nodes: Array<Node<{ label: string }>>;
   edges: Edge[];
   canvasLayout: { nodes: Array<Node<{ label: string }>>; edges: Edge[] };
@@ -140,6 +146,10 @@ export async function updateArchitecture(input: {
 
   if (input.workspaceId) {
     update.workspaceId = input.workspaceId;
+  }
+
+  if (input.projectId) {
+    update.projectId = input.projectId;
   }
 
   await updateDoc(doc(db, ARCHITECTURES_COLLECTION, input.id), update);
