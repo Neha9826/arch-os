@@ -28,21 +28,33 @@ export default function ProjectExecutionPage() {
     title: "", description: "", priority: "medium", section: "", sourceId: "", dueDate: "",
   });
 
-  const load = async () => {
-    if (!user) return;
-    setFetching(true); setError(null);
-    try {
-      const project = await getProject(projectId);
-      if (!project || project.ownerId !== user.uid || project.status !== "active") throw new Error("Project is unavailable or archived.");
-      setProjectName(project.name);
-      setTasks(await listProjectExecutionTasks(projectId, user.uid));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Execution workspace could not be loaded.");
-    } finally { setFetching(false); }
-  };
-
   useEffect(() => { if (!loading && !user) router.replace("/login"); }, [loading, user, router]);
-  useEffect(() => { if (user) void load(); }, [projectId, user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const loadExecutionWorkspace = async () => {
+      setFetching(true);
+      setError(null);
+
+      try {
+        const project = await getProject(projectId);
+        if (!project || project.ownerId !== user.uid || project.status !== "active") {
+          throw new Error("Project is unavailable or archived.");
+        }
+
+        const loadedTasks = await listProjectExecutionTasks(projectId, user.uid);
+        setProjectName(project.name);
+        setTasks(loadedTasks);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Execution workspace could not be loaded.");
+      } finally {
+        setFetching(false);
+      }
+    };
+
+    void loadExecutionWorkspace();
+  }, [projectId, user]);
 
   const summary = useMemo(() => ({
     total: tasks.length, active: tasks.filter((task) => task.status !== "done").length,
@@ -55,7 +67,12 @@ export default function ProjectExecutionPage() {
     try {
       await createProjectExecutionTask({ projectId, ownerId: user.uid, title: newTask.title, description: newTask.description, priority: newTask.priority, section: newTask.section || undefined, sourceId: newTask.sourceId, dueDate: newTask.dueDate });
       setNewTask({ title: "", description: "", priority: "medium", section: "", sourceId: "", dueDate: "" });
-      await load();
+      const project = await getProject(projectId);
+      if (!project || project.ownerId !== user.uid || project.status !== "active") {
+        throw new Error("Project is unavailable or archived.");
+      }
+      setProjectName(project.name);
+      setTasks(await listProjectExecutionTasks(projectId, user.uid));
     } catch (err) { setError(err instanceof Error ? err.message : "Task could not be created."); }
     finally { setSaving(false); }
   };
