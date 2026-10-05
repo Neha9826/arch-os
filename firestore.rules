@@ -129,6 +129,7 @@ service cloud.firestore {
 
       allow create: if isParentProjectOwner()
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active"
+        && request.resource.data.keys().hasOnly(["projectId", "ownerId", "title", "description", "priority", "status", "section", "sourceId", "dueDate", "createdAt", "updatedAt"])
         && request.resource.data.projectId == projectId
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.name is string
@@ -143,9 +144,15 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.projectId == resource.data.projectId
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.name == resource.data.name
-        && request.resource.data.purpose == resource.data.purpose
-        && request.resource.data.status in ["draft", "active", "deprecated"]
+        && request.resource.data.title == resource.data.title
+        && request.resource.data.description == resource.data.description
+        && request.resource.data.priority == resource.data.priority
+        && request.resource.data.section == resource.data.section
+        && request.resource.data.sourceId == resource.data.sourceId
+        && request.resource.data.dueDate == resource.data.dueDate
+        && request.resource.data.status in ["todo", "in-progress", "blocked", "done"]
+        && request.resource.data.keys().hasOnly(["projectId", "ownerId", "title", "description", "priority", "status", "section", "sourceId", "dueDate", "createdAt", "updatedAt"])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "updatedAt"])
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner() && resource.data.ownerId == request.auth.uid
@@ -466,6 +473,48 @@ service cloud.firestore {
         && request.resource.data.path == resource.data.path
         && request.resource.data.purpose == resource.data.purpose
         && request.resource.data.status in ["planned", "passing", "failing", "skipped"]
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
+
+      allow delete: if isParentProjectOwner()
+        && resource.data.ownerId == request.auth.uid
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
+    }
+
+    match /projects/{projectId}/executionTasks/{taskId} {
+      function isParentProjectOwner() {
+        return isSignedIn()
+          && exists(/databases/$(database)/documents/projects/$(projectId))
+          && get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid;
+      }
+
+      allow get, list: if isParentProjectOwner();
+
+      allow create: if isParentProjectOwner()
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active"
+        && request.resource.data.projectId == projectId
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200
+        && (!request.resource.data.keys().hasAll(["description"]) || (request.resource.data.description is string && request.resource.data.description.size() <= 2000))
+        && request.resource.data.priority in ["low", "medium", "high", "critical"]
+        && request.resource.data.status == "todo"
+        && (!request.resource.data.keys().hasAll(["section"]) || request.resource.data.section in ["planning", "requirements", "roadmap", "design", "architecture", "api", "database", "infrastructure", "code", "testing", "documentation"])
+        && (!request.resource.data.keys().hasAll(["sourceId"]) || (request.resource.data.sourceId is string && request.resource.data.sourceId.size() <= 160))
+        && (!request.resource.data.keys().hasAll(["dueDate"]) || (request.resource.data.dueDate is string && request.resource.data.dueDate.matches("^\\d{4}-\\d{2}-\\d{2}$")));
+
+      allow update: if isParentProjectOwner()
+        && resource.data.projectId == projectId
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.projectId == resource.data.projectId
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.title == resource.data.title
+        && request.resource.data.description == resource.data.description
+        && request.resource.data.priority == resource.data.priority
+        && request.resource.data.section == resource.data.section
+        && request.resource.data.sourceId == resource.data.sourceId
+        && request.resource.data.dueDate == resource.data.dueDate
+        && request.resource.data.status in ["todo", "in-progress", "blocked", "done"]
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner()

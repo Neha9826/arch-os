@@ -18,6 +18,7 @@ import {
   FlaskConical,
   BookOpen,
   Circle,
+  ListTodo,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -173,12 +174,20 @@ export default function ProjectDetailPage() {
                     {project.description || "Engineering workspace for this product."}
                   </p>
                 </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  onClick={() => router.push(`/projects/${project.id}/execution`)}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:border-blue-700 hover:text-blue-300"
+                >
+                  <ListTodo size={16} /> Execution
+                </button>
                 <button
                   onClick={() => router.push(`/canvas/new?projectId=${project.id}`)}
                   className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold hover:bg-blue-500"
                 >
                   <Network size={16} /> New Architecture
                 </button>
+                </div>
               </div>
 
               <div className="mt-7 max-w-2xl">
