@@ -958,7 +958,7 @@ describe("Project execution task security rules", () => {
     await assertSucceeds(updateDoc(taskRef, { status: "in-progress" }));
   });
 
-  test("execution task core fields cannot be tampered with during status update", async () => {
+  test("execution task identity fields cannot be tampered with during edit", async () => {
     await seedProject();
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(
@@ -969,7 +969,11 @@ describe("Project execution task security rules", () => {
 
     const taskRef = doc(authenticatedDb(userA), "projects", executionProject, "executionTasks", executionTask);
     await assertFails(updateDoc(taskRef, {
-      title: "Forged task",
+      projectId: "forged-project",
+      status: "in-progress",
+    }));
+    await assertFails(updateDoc(taskRef, {
+      ownerId: userB.uid,
       status: "in-progress",
     }));
   });
