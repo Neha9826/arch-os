@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { getProject, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { getProject, updateProjectPlanning, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
-import { PROJECT_SECTION_KEYS, type Project, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
+import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
 
 const META: Record<ProjectSectionKey, { label: string; description: string }> = {
@@ -39,7 +39,7 @@ export default function ProjectSectionPage() {
   const [architectures, setArchitectures] = useState<Architecture[]>([]);
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);\n  const [planning, setPlanning] = useState<ProjectPlanning>({ objective: "", scope: "", constraints: "", successCriteria: "" });\n  const [savingPlanning, setSavingPlanning] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -163,7 +163,56 @@ export default function ProjectSectionPage() {
               </div>
             </section>
 
-            {section === "architecture" ? (
+            {section === "planning" ? (
+              <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+                <div className="mb-6">
+                  <h2 className="font-semibold">Project planning</h2>
+                  <p className="mt-1 text-sm text-slate-500">Define the intent, boundaries and measurable outcome for this project.</p>
+                </div>
+                <div className="grid gap-5 md:grid-cols-2">
+                  {([
+                    ["objective", "Objective", "What are we building and why?"],
+                    ["scope", "Scope", "What is included and explicitly excluded?"],
+                    ["constraints", "Constraints", "Budget, technical, delivery or operational constraints."],
+                    ["successCriteria", "Success criteria", "How will we know the project achieved its intended outcome?"],
+                  ] as const).map(([key, label, placeholder]) => (
+                    <label key={key} className="block">
+                      <span className="text-xs font-medium text-slate-300">{label}</span>
+                      <textarea
+                        value={planning[key]}
+                        onChange={(event) => setPlanning((current) => ({ ...current, [key]: event.target.value }))}
+                        maxLength={5000}
+                        rows={6}
+                        placeholder={placeholder}
+                        className="mt-2 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-blue-500"
+                      />
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-5 flex items-center justify-end gap-3">
+                  <span className="text-xs text-slate-600">Up to 5,000 characters per field</span>
+                  <button
+                    disabled={savingPlanning}
+                    onClick={async () => {
+                      if (!user || !project) return;
+                      setSavingPlanning(true);
+                      setError(null);
+                      try {
+                        await updateProjectPlanning({ projectId: project.id, ownerId: user.uid, planning });
+                        setProject((current) => current ? { ...current, planning } : current);
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Planning could not be saved.");
+                      } finally {
+                        setSavingPlanning(false);
+                      }
+                    }}
+                    className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50"
+                  >
+                    {savingPlanning ? "Saving..." : "Save planning"}
+                  </button>
+                </div>
+              </section>
+            ) : section === "architecture" ? (
               <section className="mt-6">
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <div>
@@ -192,7 +241,7 @@ export default function ProjectSectionPage() {
               <section className="mt-6 rounded-2xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center">
                 <h2 className="text-lg font-semibold">{meta.label} workspace ready</h2>
                 <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">
-                  This section now has its own project workspace and persistent status. Its domain artifact model can be added here without changing the project container or architecture history.
+                  This section has its own project workspace and persistent status. Its domain artifact model will be added here as the engineering workflow matures.
                 </p>
               </section>
             )}
