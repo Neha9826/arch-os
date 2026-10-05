@@ -8,6 +8,8 @@ import {
 const PROJECT_NAME_MAX_LENGTH = 120;
 const PROJECT_DESCRIPTION_MAX_LENGTH = 1000;
 const PROJECT_PLANNING_FIELD_MAX_LENGTH = 5000;
+const PROJECT_REQUIREMENT_TITLE_MAX_LENGTH = 200;
+const PROJECT_REQUIREMENT_DESCRIPTION_MAX_LENGTH = 2000;
 
 export function isProjectSectionKey(value: unknown): value is ProjectSectionKey {
   return (
@@ -90,5 +92,28 @@ export function isValidProjectDescription(description: string | undefined): bool
   return (
     description === undefined ||
     description.length <= PROJECT_DESCRIPTION_MAX_LENGTH
+  );
+}
+
+
+export function isProjectRequirementPriority(value: unknown): value is import("./types").ProjectRequirementPriority {
+  return value === "low" || value === "medium" || value === "high" || value === "critical";
+}
+
+export function isProjectRequirementStatus(value: unknown): value is import("./types").ProjectRequirementStatus {
+  return value === "todo" || value === "in-progress" || value === "done";
+}
+
+export function isValidProjectRequirement(requirement: import("./types").ProjectRequirement): boolean {
+  return (
+    typeof requirement.id === "string" && requirement.id.length > 0 &&
+    typeof requirement.projectId === "string" && requirement.projectId.length > 0 &&
+    typeof requirement.ownerId === "string" && requirement.ownerId.length > 0 &&
+    typeof requirement.title === "string" && requirement.title.trim().length > 0 &&
+    requirement.title.trim().length <= PROJECT_REQUIREMENT_TITLE_MAX_LENGTH &&
+    (requirement.description === undefined ||
+      (typeof requirement.description === "string" && requirement.description.length <= PROJECT_REQUIREMENT_DESCRIPTION_MAX_LENGTH)) &&
+    isProjectRequirementPriority(requirement.priority) &&
+    isProjectRequirementStatus(requirement.status)
   );
 }
