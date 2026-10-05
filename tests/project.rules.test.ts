@@ -15,6 +15,7 @@ import {
   doc,
   getDoc,
   setDoc,
+  deleteDoc,
   updateDoc,
 } from "firebase/firestore";
 import fs from "node:fs";
@@ -207,6 +208,34 @@ describe("Project security rules", () => {
           architecture: "complete",
         },
       }),
+    );
+  });
+
+  test("archived projects and their engineering records cannot be deleted", async () => {
+    await seedWorkspace(workspaceA, userA.uid);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await setDoc(
+        doc(firestore, "projects", projectA),
+        { ...projectData, status: "archived" },
+      );
+      await setDoc(
+        doc(firestore, "projects", projectA, "requirements", "requirement-a"),
+        {
+          projectId: projectA,
+          ownerId: userA.uid,
+          title: "Requirement",
+          priority: "medium",
+          status: "todo",
+        },
+      );
+    });
+
+    await assertFails(deleteDoc(doc(db(userA), "projects", projectA)));
+    await assertFails(
+      deleteDoc(
+        doc(db(userA), "projects", projectA, "requirements", "requirement-a"),
+      ),
     );
   });
 
