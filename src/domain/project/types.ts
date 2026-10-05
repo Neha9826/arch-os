@@ -149,3 +149,20 @@ export type ProjectCodeArtifact = {
   createdAt?: unknown;
   updatedAt?: unknown;
 };
+
+
+export type ProjectTestType = "unit" | "integration" | "e2e" | "security" | "performance" | "other";
+export type ProjectTestStatus = "planned" | "passing" | "failing" | "skipped";
+
+export type ProjectTestCase = {
+  id: string;
+  projectId: string;
+  ownerId: string;
+  name: string;
+  type: ProjectTestType;
+  path: string;
+  purpose: string;
+  status: ProjectTestStatus;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
