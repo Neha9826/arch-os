@@ -745,8 +745,15 @@ service cloud.firestore {
             || request.resource.data.status == resource.data.status
           )
           && (
-            request.resource.data.status != "open"
-            || get(/databases/$(database)/documents/architectures/$(architectureId)/branches/$(request.resource.data.sourceBranchId)).data.status == "active"
+            (
+              request.resource.data.status == "open"
+              && get(/databases/$(database)/documents/architectures/$(architectureId)/branches/$(request.resource.data.sourceBranchId)).data.status == "active"
+            )
+            || request.resource.data.status == "closed"
+            || (
+              request.resource.data.status == "merged"
+              && getAfter(/databases/$(database)/documents/architectures/$(architectureId)/branches/$(request.resource.data.sourceBranchId)).data.status == "merged"
+            )
           )
           && request.resource.data.updatedAt == request.time;
 
