@@ -684,6 +684,15 @@ function StudioEditor() {
             : item,
         ),
       );
+      if (branch.pullRequestId) {
+        setPullRequests((current) =>
+          current.map((item) =>
+            item.id === branch.pullRequestId
+              ? { ...item, status: "merged" }
+              : item,
+          ),
+        );
+      }
       setHasUnsavedChanges(false);
       setReviewingBranch(null);
       setReviewingBaseSnapshot(null);
