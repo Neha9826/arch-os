@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { getProject, updateProjectPlanning, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { createProjectRequirement, getProject, listProjectRequirements, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
-import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
+import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
 
 const META: Record<ProjectSectionKey, { label: string; description: string }> = {
@@ -41,7 +41,7 @@ export default function ProjectSectionPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [planning, setPlanning] = useState<ProjectPlanning>({ objective: "", scope: "", constraints: "", successCriteria: "" });
-  const [savingPlanning, setSavingPlanning] = useState(false);
+  const [savingPlanning, setSavingPlanning] = useState(false);\n  const [requirements, setRequirements] = useState<ProjectRequirement[]>([]);\n  const [newRequirement, setNewRequirement] = useState({ title: "", description: "", priority: "medium" as ProjectRequirementPriority });\n  const [savingRequirement, setSavingRequirement] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -62,7 +62,7 @@ export default function ProjectSectionPage() {
           : [];
         if (!cancelled) {
           setProject(current);
-          setArchitectures(items);
+          setArchitectures(items);\n          setRequirements(requirementItems);
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Section could not be loaded.");
@@ -212,6 +212,59 @@ export default function ProjectSectionPage() {
                   >
                     {savingPlanning ? "Saving..." : "Save planning"}
                   </button>
+                </div>
+              </section>
+            ) : section === "requirements" ? (
+              <section className="mt-6 space-y-6">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+                  <h2 className="font-semibold">Add requirement</h2>
+                  <div className="mt-5 grid gap-4">
+                    <input value={newRequirement.title} onChange={(e) => setNewRequirement((v) => ({ ...v, title: e.target.value }))} maxLength={200} placeholder="Requirement title" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <textarea value={newRequirement.description} onChange={(e) => setNewRequirement((v) => ({ ...v, description: e.target.value }))} maxLength={2000} rows={4} placeholder="Describe the requirement and expected behavior." className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <select value={newRequirement.priority} onChange={(e) => setNewRequirement((v) => ({ ...v, priority: e.target.value as ProjectRequirementPriority }))} className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm">
+                        <option value="low">Low priority</option><option value="medium">Medium priority</option><option value="high">High priority</option><option value="critical">Critical priority</option>
+                      </select>
+                      <button disabled={savingRequirement || !newRequirement.title.trim()} onClick={async () => {
+                        if (!user || !project) return;
+                        setSavingRequirement(true); setError(null);
+                        try {
+                          await createProjectRequirement({ projectId: project.id, ownerId: user.uid, title: newRequirement.title, description: newRequirement.description, priority: newRequirement.priority });
+                          const items = await listProjectRequirements(project.id, user.uid);
+                          setRequirements(items);
+                          setNewRequirement({ title: "", description: "", priority: "medium" });
+                        } catch (err) { setError(err instanceof Error ? err.message : "Requirement could not be created."); }
+                        finally { setSavingRequirement(false); }
+                      }} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50">{savingRequirement ? "Adding..." : "Add requirement"}</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {requirements.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No requirements defined yet.</div>
+                  ) : requirements.map((requirement) => (
+                    <div key={requirement.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-semibold">{requirement.title}</h3>
+                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{requirement.priority}</span>
+                          </div>
+                          {requirement.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{requirement.description}</p>}
+                        </div>
+                        <select value={requirement.status} onChange={async (e) => {
+                          if (!user || !project) return;
+                          const status = e.target.value as "todo" | "in-progress" | "done";
+                          try {
+                            await updateProjectRequirementStatus({ projectId: project.id, requirementId: requirement.id, ownerId: user.uid, status });
+                            setRequirements((items) => items.map((item) => item.id === requirement.id ? { ...item, status } : item));
+                          } catch (err) { setError(err instanceof Error ? err.message : "Requirement status could not be updated."); }
+                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                          <option value="todo">To do</option><option value="in-progress">In progress</option><option value="done">Done</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </section>
             ) : section === "architecture" ? (
