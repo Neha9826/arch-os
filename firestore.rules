@@ -339,6 +339,51 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid;
     }
 
+    match /projects/{projectId}/codeArtifacts/{artifactId} {
+      function isParentProjectOwner() {
+        return isSignedIn()
+          && exists(/databases/$(database)/documents/projects/$(projectId))
+          && get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid;
+      }
+
+      allow get, list: if isParentProjectOwner();
+
+      allow create: if isParentProjectOwner()
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active"
+        && request.resource.data.projectId == projectId
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 160
+        && request.resource.data.language is string
+        && request.resource.data.language.size() > 0
+        && request.resource.data.language.size() <= 100
+        && request.resource.data.runtime is string
+        && request.resource.data.runtime.size() <= 100
+        && request.resource.data.path is string
+        && request.resource.data.path.size() > 0
+        && request.resource.data.path.size() <= 500
+        && request.resource.data.purpose is string
+        && request.resource.data.purpose.size() <= 2000
+        && request.resource.data.status == "planned";
+
+      allow update: if isParentProjectOwner()
+        && resource.data.projectId == projectId
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.projectId == resource.data.projectId
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.name == resource.data.name
+        && request.resource.data.language == resource.data.language
+        && request.resource.data.runtime == resource.data.runtime
+        && request.resource.data.path == resource.data.path
+        && request.resource.data.purpose == resource.data.purpose
+        && request.resource.data.status in ["planned", "active", "deprecated"]
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
+
+      allow delete: if isParentProjectOwner()
+        && resource.data.ownerId == request.auth.uid;
+    }
+
     match /architectures/{architectureId} {
       // Existing owner-only documents predate the workspace model. They remain
       // available to their owner and may be associated with a workspace on save.
