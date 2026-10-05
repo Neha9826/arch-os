@@ -21,6 +21,7 @@ import {
   type ArchitectureBranch,
   type ArchitectureBranchStatus,
 } from "@/domain/architecture/branches";
+import { canTransitionPullRequestStatus } from "@/domain/architecture/pullRequests";
 import type { ReactFlowArchitectureState } from "@/domain/architecture/reactFlowAdapter";
 import {
   architectureIRToReactFlow,
@@ -52,6 +53,8 @@ function toBranch(
       typeof data.description === "string" ? data.description : undefined,
     baseSnapshotId:
       typeof data.baseSnapshotId === "string" ? data.baseSnapshotId : "",
+    pullRequestId:
+      typeof data.pullRequestId === "string" ? data.pullRequestId : undefined,
     status:
       data.status === "merged" || data.status === "abandoned"
         ? data.status
@@ -288,6 +291,17 @@ export async function mergeArchitectureBranch(input: {
     const baseSnapshot = await transaction.get(
       baseSnapshotRef(branch.baseSnapshotId),
     );
+    const pullRequestSnapshot = branch.pullRequestId
+      ? await transaction.get(
+          doc(
+            db,
+            "architectures",
+            input.architectureId,
+            "pullRequests",
+            branch.pullRequestId,
+          ),
+        )
+      : null;
 
     if (!baseSnapshot.exists()) {
       throw new Error("The branch base snapshot is unavailable.");
@@ -350,6 +364,28 @@ export async function mergeArchitectureBranch(input: {
       status: "merged",
       updatedAt: serverTimestamp(),
     });
+
+    if (pullRequestSnapshot?.exists()) {
+      const pullRequest = pullRequestSnapshot.data();
+      if (pullRequest.status === "open") {
+        if (!canTransitionPullRequestStatus("open", "merged")) {
+          throw new Error("The linked pull request cannot be merged.");
+        }
+        transaction.update(
+          doc(
+            db,
+            "architectures",
+            input.architectureId,
+            "pullRequests",
+            branch.pullRequestId!,
+          ),
+          {
+            status: "merged",
+            updatedAt: serverTimestamp(),
+          },
+        );
+      }
+    }
 
     return {
       ...branch,
