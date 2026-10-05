@@ -39,10 +39,12 @@ function toProject(id: string, data: Record<string, unknown>): Project {
 
 export async function listProjectsForWorkspace(
   workspaceId: string,
+  ownerId: string,
 ): Promise<Project[]> {
   const projectsQuery = query(
     collection(db, PROJECTS_COLLECTION),
     where("workspaceId", "==", workspaceId),
+    where("ownerId", "==", ownerId),
   );
   const snapshot = await getDocs(projectsQuery);
 
