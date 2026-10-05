@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { createProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { createProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
 import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectTestCase, type ProjectTestStatus, type ProjectTestType, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
@@ -66,6 +66,9 @@ export default function ProjectSectionPage() {
   const [testCases, setTestCases] = useState<ProjectTestCase[]>([]);
   const [newTestCase, setNewTestCase] = useState({ name: "", type: "unit" as ProjectTestType, path: "", purpose: "" });
   const [savingTestCase, setSavingTestCase] = useState(false);
+  const [documentation, setDocumentation] = useState<ProjectDocumentationEntry[]>([]);
+  const [newDocumentation, setNewDocumentation] = useState({ title: "", type: "readme" as ProjectDocumentationType, path: "", summary: "" });
+  const [savingDocumentation, setSavingDocumentation] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -115,6 +118,10 @@ export default function ProjectSectionPage() {
         if (section === "roadmap") {
           const milestoneItems = await listProjectMilestones(projectId, user.uid);
           if (!cancelled) setMilestones(milestoneItems);
+        }
+        if (section === "documentation") {
+          const documentationItems = await listProjectDocumentation(projectId, user.uid);
+          if (!cancelled) setDocumentation(documentationItems);
         }
         if (section === "requirements") {
           const requirementItems = await listProjectRequirements(projectId, user.uid);
@@ -221,7 +228,62 @@ export default function ProjectSectionPage() {
               </div>
             </section>
 
-            {section === "testing" ? (
+            {section === "documentation" ? (
+              <section className="mt-6 space-y-6">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+                  <h2 className="font-semibold">Add documentation entry</h2>
+                  <p className="mt-1 text-sm text-slate-500">Track documentation artifacts without duplicating their actual content.</p>
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <input value={newDocumentation.title} onChange={(e) => setNewDocumentation((v) => ({ ...v, title: e.target.value }))} maxLength={200} placeholder="Document title" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <select value={newDocumentation.type} onChange={(e) => setNewDocumentation((v) => ({ ...v, type: e.target.value as ProjectDocumentationType }))} className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500">
+                      <option value="readme">README</option><option value="api">API</option><option value="architecture">Architecture</option><option value="runbook">Runbook</option><option value="decision">Decision</option><option value="guide">Guide</option><option value="other">Other</option>
+                    </select>
+                    <input value={newDocumentation.path} onChange={(e) => setNewDocumentation((v) => ({ ...v, path: e.target.value }))} maxLength={500} placeholder="Repository path / document location" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500 md:col-span-2" />
+                    <textarea value={newDocumentation.summary} onChange={(e) => setNewDocumentation((v) => ({ ...v, summary: e.target.value }))} maxLength={2000} rows={3} placeholder="What does this document explain?" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500 md:col-span-2" />
+                    <div className="flex justify-end md:col-span-2">
+                      <button disabled={savingDocumentation || !newDocumentation.title.trim() || !newDocumentation.path.trim()} onClick={async () => {
+                        if (!user || !project) return;
+                        setSavingDocumentation(true); setError(null);
+                        try {
+                          await createProjectDocumentation({ projectId: project.id, ownerId: user.uid, ...newDocumentation });
+                          setDocumentation(await listProjectDocumentation(project.id, user.uid));
+                          setNewDocumentation({ title: "", type: "readme", path: "", summary: "" });
+                        } catch (err) { setError(err instanceof Error ? err.message : "Documentation entry could not be created."); }
+                        finally { setSavingDocumentation(false); }
+                      }} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50">{savingDocumentation ? "Adding..." : "Add document"}</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {documentation.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No documentation entries defined yet.</div>
+                  ) : documentation.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-semibold">{item.title}</h3>
+                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{item.type}</span>
+                          </div>
+                          <p className="mt-2 font-mono text-xs text-slate-500">{item.path}</p>
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{item.summary || "No summary documented."}</p>
+                        </div>
+                        <select value={item.status} onChange={async (e) => {
+                          if (!user || !project) return;
+                          const status = e.target.value as ProjectDocumentationStatus;
+                          try {
+                            await updateProjectDocumentationStatus({ projectId: project.id, documentationId: item.id, ownerId: user.uid, status });
+                            setDocumentation((items) => items.map((current) => current.id === item.id ? { ...current, status } : current));
+                          } catch (err) { setError(err instanceof Error ? err.message : "Documentation status could not be updated."); }
+                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                          <option value="planned">Planned</option><option value="draft">Draft</option><option value="published">Published</option><option value="deprecated">Deprecated</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : section === "testing" ? (
               <section className="mt-6 space-y-6">
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
                   <h2 className="font-semibold">Add test area</h2>
