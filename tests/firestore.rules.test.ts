@@ -12,9 +12,11 @@ import {
   RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
 import {
+  collection,
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   updateDoc,
   runTransaction,
@@ -840,5 +842,164 @@ describe("Architecture snapshot security rules", () => {
     const snapshotRef = doc(db, "architectures", architectureA, "snapshots", "snapshot-a");
     await assertFails(updateDoc(snapshotRef, { name: "Unauthorized", message: "" }));
     await assertFails(deleteDoc(snapshotRef));
+  });
+});
+
+
+describe("Project execution task security rules", () => {
+  const executionProject = "project-execution-a";
+  const archivedProject = "project-execution-archived";
+  const executionTask = "task-a";
+
+  const projectData = {
+    workspaceId: workspaceA,
+    ownerId: userA.uid,
+    createdBy: userA.uid,
+    name: "Execution Project",
+    description: "",
+    status: "active",
+    sections: {
+      planning: "not-started",
+      requirements: "not-started",
+      roadmap: "not-started",
+      design: "not-started",
+      architecture: "not-started",
+      api: "not-started",
+      database: "not-started",
+      infrastructure: "not-started",
+      code: "not-started",
+      testing: "not-started",
+      documentation: "not-started",
+    },
+  };
+
+  const taskData = {
+    projectId: executionProject,
+    ownerId: userA.uid,
+    title: "Implement execution flow",
+    description: "Build the first execution workflow.",
+    priority: "high",
+    status: "todo",
+    section: "code",
+    sourceId: "code-artifact-a",
+    dueDate: "2026-10-20",
+  };
+
+  async function seedProject(status: "active" | "archived" = "active") {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "projects", executionProject), {
+        ...projectData,
+        status,
+      });
+    });
+  }
+
+  test("owner can create and read an execution task on an active project", async () => {
+    await seedProject();
+    const db = authenticatedDb(userA);
+    const taskRef = doc(db, "projects", executionProject, "executionTasks", executionTask);
+
+    await assertSucceeds(setDoc(taskRef, taskData));
+    await assertSucceeds(getDoc(taskRef));
+  });
+
+  test("unauthenticated and other users cannot read execution tasks", async () => {
+    await seedProject();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "projects", executionProject, "executionTasks", executionTask),
+        taskData,
+      );
+    });
+
+    await assertFails(
+      getDoc(doc(unauthenticatedDb(), "projects", executionProject, "executionTasks", executionTask)),
+    );
+
+    await assertFails(
+      getDoc(doc(authenticatedDb(userB), "projects", executionProject, "executionTasks", executionTask)),
+    );
+  });
+
+  test("other users cannot list execution tasks", async () => {
+    await seedProject();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "projects", executionProject, "executionTasks", executionTask),
+        taskData,
+      );
+    });
+
+    await assertFails(
+      getDocs(collection(authenticatedDb(userB), "projects", executionProject, "executionTasks")),
+    );
+  });
+
+  test("execution tasks cannot be created on archived projects", async () => {
+    await seedProject("archived");
+    await assertFails(
+      setDoc(
+        doc(authenticatedDb(userA), "projects", executionProject, "executionTasks", executionTask),
+        taskData,
+      ),
+    );
+  });
+
+  test("execution task status can be updated without changing immutable fields", async () => {
+    await seedProject();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "projects", executionProject, "executionTasks", executionTask),
+        taskData,
+      );
+    });
+
+    const taskRef = doc(authenticatedDb(userA), "projects", executionProject, "executionTasks", executionTask);
+    await assertSucceeds(updateDoc(taskRef, { status: "in-progress" }));
+  });
+
+  test("execution task core fields cannot be tampered with during status update", async () => {
+    await seedProject();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "projects", executionProject, "executionTasks", executionTask),
+        taskData,
+      );
+    });
+
+    const taskRef = doc(authenticatedDb(userA), "projects", executionProject, "executionTasks", executionTask);
+    await assertFails(updateDoc(taskRef, {
+      title: "Forged task",
+      status: "in-progress",
+    }));
+  });
+
+  test("owner can delete an execution task on an active project but not an archived project", async () => {
+    await seedProject();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "projects", executionProject, "executionTasks", executionTask),
+        taskData,
+      );
+    });
+
+    await assertSucceeds(
+      deleteDoc(doc(authenticatedDb(userA), "projects", executionProject, "executionTasks", executionTask)),
+    );
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "projects", archivedProject), {
+        ...projectData,
+        status: "archived",
+      });
+      await setDoc(
+        doc(context.firestore(), "projects", archivedProject, "executionTasks", executionTask),
+        { ...taskData, projectId: archivedProject },
+      );
+    });
+
+    await assertFails(
+      deleteDoc(doc(authenticatedDb(userA), "projects", archivedProject, "executionTasks", executionTask)),
+    );
   });
 });
