@@ -23,7 +23,7 @@ export function canTransitionPullRequestStatus(
   next: ArchitecturePullRequestStatus,
 ): boolean {
   if (current !== "open") return current === next;
-  return next === "open" || next === "closed" || next === "merged";
+  return next === "open" || next === "closed";
 }
 
 export function canOpenPullRequestFromBranch(
