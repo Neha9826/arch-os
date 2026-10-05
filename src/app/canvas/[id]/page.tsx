@@ -63,7 +63,7 @@ import {
 } from "@/domain/architecture/branches";
 import type { ArchitectureIR } from "@/domain/architecture/types";
 import type { ReactFlowArchitectureState } from "@/domain/architecture/reactFlowAdapter";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Save,
@@ -93,10 +93,13 @@ const getId = () => `${id++}`;
 function StudioEditor() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const projectId = params.id as string;
-  const containerProjectId = searchParams.get("projectId") ?? undefined;
+  const [containerProjectId, setContainerProjectId] = useState<string | undefined>();
+
+  useEffect(() => {
+    setContainerProjectId(new URLSearchParams(window.location.search).get("projectId") ?? undefined);
+  }, []);
   const isNewProject = projectId === "new";
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
