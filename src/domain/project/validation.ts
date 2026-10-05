@@ -259,3 +259,25 @@ export function isValidProjectTestCase(
     isProjectTestStatus(testCase.status)
   );
 }
+
+
+export function isProjectDocumentationType(value: unknown): value is import("./types").ProjectDocumentationType {
+  return value === "readme" || value === "api" || value === "architecture" || value === "runbook" || value === "decision" || value === "guide" || value === "other";
+}
+
+export function isProjectDocumentationStatus(value: unknown): value is import("./types").ProjectDocumentationStatus {
+  return value === "planned" || value === "draft" || value === "published" || value === "deprecated";
+}
+
+export function isValidProjectDocumentationEntry(entry: import("./types").ProjectDocumentationEntry): boolean {
+  return (
+    typeof entry.id === "string" && entry.id.length > 0 &&
+    typeof entry.projectId === "string" && entry.projectId.length > 0 &&
+    typeof entry.ownerId === "string" && entry.ownerId.length > 0 &&
+    typeof entry.title === "string" && entry.title.trim().length > 0 && entry.title.length <= 200 &&
+    isProjectDocumentationType(entry.type) &&
+    typeof entry.path === "string" && entry.path.trim().length > 0 && entry.path.length <= 500 &&
+    typeof entry.summary === "string" && entry.summary.length <= 2000 &&
+    isProjectDocumentationStatus(entry.status)
+  );
+}
