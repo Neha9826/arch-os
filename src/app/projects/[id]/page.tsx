@@ -223,6 +223,13 @@ export default function ProjectDetailPage() {
                       <h3 className="mt-4 font-semibold">{meta.label}</h3>
                       <p className="mt-1 min-h-10 text-xs leading-5 text-slate-500">{meta.description}</p>
 
+                      <button
+                        onClick={() => router.push(`/projects/${project.id}/${key}`)}
+                        className="mt-4 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-medium text-slate-300 hover:border-blue-700 hover:text-blue-300"
+                      >
+                        Open workspace
+                      </button>
+
                       <select
                         value={status}
                         disabled={savingSection !== null}
