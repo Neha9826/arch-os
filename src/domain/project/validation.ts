@@ -15,6 +15,24 @@ export function isProjectSectionKey(value: unknown): value is ProjectSectionKey 
   );
 }
 
+export function isProjectSectionStatus(value: unknown): value is import("./types").ProjectSectionStatus {
+  return value === "not-started" || value === "in-progress" || value === "complete";
+}
+
+export function createDefaultProjectSections(): Record<ProjectSectionKey, import("./types").ProjectSectionStatus> {
+  return Object.fromEntries(
+    PROJECT_SECTION_KEYS.map((key) => [key, "not-started"]),
+  ) as Record<ProjectSectionKey, import("./types").ProjectSectionStatus>;
+}
+
+export function isValidProjectSections(
+  sections: unknown,
+): sections is Record<ProjectSectionKey, import("./types").ProjectSectionStatus> {
+  if (typeof sections !== "object" || sections === null) return false;
+  const value = sections as Record<string, unknown>;
+  return PROJECT_SECTION_KEYS.every((key) => isProjectSectionStatus(value[key]));
+}
+
 export function isProjectStatus(value: unknown): value is ProjectStatus {
   return value === "active" || value === "archived";
 }
@@ -35,7 +53,8 @@ export function isValidProject(project: Project): boolean {
     (project.description === undefined ||
       (typeof project.description === "string" &&
         project.description.length <= PROJECT_DESCRIPTION_MAX_LENGTH)) &&
-    isProjectStatus(project.status)
+    isProjectStatus(project.status) &&
+    (project.sections === undefined || isValidProjectSections(project.sections))
   );
 }
 
