@@ -35,6 +35,40 @@ service cloud.firestore {
         && request.resource.data.ownerId == resource.data.ownerId;
     }
 
+    match /projects/{projectId} {
+      function isProjectOwner() {
+        return isSignedIn()
+          && exists(/databases/$(database)/documents/projects/$(projectId))
+          && get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid;
+      }
+
+      allow get: if isProjectOwner();
+
+      allow list: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && request.resource.data.workspaceId is string
+        && isWorkspaceOwner(request.resource.data.workspaceId)
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.status == "active";
+
+      allow update: if isProjectOwner()
+        && request.resource.data.workspaceId == resource.data.workspaceId
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.status in ["active", "archived"];
+
+      allow delete: if isProjectOwner();
+    }
+
     match /architectures/{architectureId} {
       // Existing owner-only documents predate the workspace model. They remain
       // available to their owner and may be associated with a workspace on save.
