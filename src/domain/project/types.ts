@@ -18,7 +18,14 @@ export type ProjectSectionKey = (typeof PROJECT_SECTION_KEYS)[number];
 
 export type ProjectSectionStatus = "not-started" | "in-progress" | "complete";
 
-export type ProjectPlanning = {\n  objective: string;\n  scope: string;\n  constraints: string;\n  successCriteria: string;\n};\n\nexport type ProjectSection = {
+export type ProjectPlanning = {
+  objective: string;
+  scope: string;
+  constraints: string;
+  successCriteria: string;
+};
+
+export type ProjectSection = {
   key: ProjectSectionKey;
   status: ProjectSectionStatus;
 };
@@ -30,6 +37,7 @@ export type Project = {
   createdBy: string;
   name: string;
   description?: string;
+  planning?: ProjectPlanning;
   status: ProjectStatus;
   sections?: Record<ProjectSectionKey, ProjectSectionStatus>;
   createdAt?: unknown;
