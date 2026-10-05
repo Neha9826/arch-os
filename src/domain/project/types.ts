@@ -210,21 +210,3 @@ export type ProjectExecutionTask = {
   createdAt?: unknown;
   updatedAt?: unknown;
 };
-
-export type ProjectExecutionTaskPriority = "low" | "medium" | "high" | "critical";
-export type ProjectExecutionTaskStatus = "todo" | "in-progress" | "blocked" | "done";
-
-export type ProjectExecutionTask = {
-  id: string;
-  projectId: string;
-  ownerId: string;
-  title: string;
-  description?: string;
-  priority: ProjectExecutionTaskPriority;
-  status: ProjectExecutionTaskStatus;
-  section?: ProjectSectionKey;
-  sourceId?: string;
-  dueDate?: string;
-  createdAt?: unknown;
-  updatedAt?: unknown;
-};
