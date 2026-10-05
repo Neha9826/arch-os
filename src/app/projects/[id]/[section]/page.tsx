@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { createProjectApiContract, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { createProjectApiContract, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
-import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
+import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
 
 const META: Record<ProjectSectionKey, { label: string; description: string }> = {
@@ -60,6 +60,9 @@ export default function ProjectSectionPage() {
   const [infrastructureResources, setInfrastructureResources] = useState<ProjectInfrastructureResource[]>([]);
   const [newInfrastructureResource, setNewInfrastructureResource] = useState<{ name: string; provider: string; environment: ProjectInfrastructureEnvironment; purpose: string }>({ name: "", provider: "", environment: "development", purpose: "" });
   const [savingInfrastructureResource, setSavingInfrastructureResource] = useState(false);
+  const [codeArtifacts, setCodeArtifacts] = useState<ProjectCodeArtifact[]>([]);
+  const [newCodeArtifact, setNewCodeArtifact] = useState({ name: "", language: "", runtime: "", path: "", purpose: "" });
+  const [savingCodeArtifact, setSavingCodeArtifact] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -85,6 +88,10 @@ export default function ProjectSectionPage() {
         if (section === "infrastructure") {
           const resourceItems = await listProjectInfrastructureResources(projectId, user.uid);
           if (!cancelled) setInfrastructureResources(resourceItems);
+        }
+        if (section === "code") {
+          const artifactItems = await listProjectCodeArtifacts(projectId, user.uid);
+          if (!cancelled) setCodeArtifacts(artifactItems);
         }
         if (section === "database") {
           const entityItems = await listProjectDatabaseEntities(projectId, user.uid);
@@ -207,7 +214,62 @@ export default function ProjectSectionPage() {
               </div>
             </section>
 
-            {section === "infrastructure" ? (
+            {section === "code" ? (
+              <section className="mt-6 space-y-6">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+                  <h2 className="font-semibold">Add code artifact</h2>
+                  <p className="mt-1 text-sm text-slate-500">Track implementation areas without duplicating repository history.</p>
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <input value={newCodeArtifact.name} onChange={(e) => setNewCodeArtifact((v) => ({ ...v, name: e.target.value }))} maxLength={160} placeholder="Artifact name" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <input value={newCodeArtifact.language} onChange={(e) => setNewCodeArtifact((v) => ({ ...v, language: e.target.value }))} maxLength={100} placeholder="Language (TypeScript, Python...)" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <input value={newCodeArtifact.runtime} onChange={(e) => setNewCodeArtifact((v) => ({ ...v, runtime: e.target.value }))} maxLength={100} placeholder="Runtime / framework (Node.js, Next.js...)" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <input value={newCodeArtifact.path} onChange={(e) => setNewCodeArtifact((v) => ({ ...v, path: e.target.value }))} maxLength={500} placeholder="Repository path / module location" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <textarea value={newCodeArtifact.purpose} onChange={(e) => setNewCodeArtifact((v) => ({ ...v, purpose: e.target.value }))} maxLength={2000} rows={3} placeholder="What implementation responsibility does this artifact own?" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500 md:col-span-2" />
+                    <div className="flex justify-end md:col-span-2">
+                      <button disabled={savingCodeArtifact || !newCodeArtifact.name.trim() || !newCodeArtifact.language.trim() || !newCodeArtifact.path.trim()} onClick={async () => {
+                        if (!user || !project) return;
+                        setSavingCodeArtifact(true); setError(null);
+                        try {
+                          await createProjectCodeArtifact({ projectId: project.id, ownerId: user.uid, ...newCodeArtifact });
+                          setCodeArtifacts(await listProjectCodeArtifacts(project.id, user.uid));
+                          setNewCodeArtifact({ name: "", language: "", runtime: "", path: "", purpose: "" });
+                        } catch (err) { setError(err instanceof Error ? err.message : "Code artifact could not be created."); }
+                        finally { setSavingCodeArtifact(false); }
+                      }} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50">{savingCodeArtifact ? "Adding..." : "Add artifact"}</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {codeArtifacts.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No code artifacts defined yet.</div>
+                  ) : codeArtifacts.map((artifact) => (
+                    <div key={artifact.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-semibold">{artifact.name}</h3>
+                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{artifact.language}</span>
+                            {artifact.runtime && <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] text-slate-500">{artifact.runtime}</span>}
+                          </div>
+                          <p className="mt-2 font-mono text-xs text-slate-500">{artifact.path}</p>
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{artifact.purpose || "No purpose documented."}</p>
+                        </div>
+                        <select value={artifact.status} onChange={async (e) => {
+                          if (!user || !project) return;
+                          const status = e.target.value as ProjectCodeArtifactStatus;
+                          try {
+                            await updateProjectCodeArtifactStatus({ projectId: project.id, artifactId: artifact.id, ownerId: user.uid, status });
+                            setCodeArtifacts((items) => items.map((item) => item.id === artifact.id ? { ...item, status } : item));
+                          } catch (err) { setError(err instanceof Error ? err.message : "Code artifact status could not be updated."); }
+                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                          <option value="planned">Planned</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : section === "infrastructure" ? (
               <section className="mt-6 space-y-6">
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
                   <h2 className="font-semibold">Add infrastructure resource</h2>
