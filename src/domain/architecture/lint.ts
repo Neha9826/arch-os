@@ -1,6 +1,7 @@
 import type { ArchitectureIR } from "./types";
 
 export type ArchitectureLintSeverity = "error" | "warning" | "info";
+export type ArchitectureHealthStatus = "healthy" | "good" | "needs-attention" | "critical";
 
 export type ArchitectureLintFinding = {
   code: string;
@@ -12,6 +13,15 @@ export type ArchitectureLintFinding = {
   relationId?: string;
 };
 
+export type ArchitectureHealthMetrics = {
+  components: number;
+  relations: number;
+  connectedComponents: number;
+  isolatedComponents: number;
+  maxIncomingRelations: number;
+  maxOutgoingRelations: number;
+};
+
 export type ArchitectureLintResult = {
   findings: ArchitectureLintFinding[];
   summary: {
@@ -19,11 +29,41 @@ export type ArchitectureLintResult = {
     warnings: number;
     info: number;
   };
+  health: {
+    score: number;
+    status: ArchitectureHealthStatus;
+    metrics: ArchitectureHealthMetrics;
+  };
 };
+
+function getHealthStatus(score: number): ArchitectureHealthStatus {
+  if (score >= 90) return "healthy";
+  if (score >= 70) return "good";
+  if (score >= 40) return "needs-attention";
+  return "critical";
+}
+
+function calculateHealthScore(
+  findings: ArchitectureLintFinding[],
+  componentCount: number,
+): number {
+  if (componentCount === 0) return 0;
+
+  const penalty = findings.reduce((total, finding) => {
+    if (finding.severity === "error") return total + 35;
+    if (finding.severity === "warning") return total + 10;
+    return total + 2;
+  }, 0);
+
+  return Math.max(0, Math.min(100, 100 - penalty));
+}
 
 /**
  * Runs deterministic, local checks against the canonical Architecture IR.
  * Findings are advisory: they never mutate the architecture.
+ *
+ * The returned health score is intentionally explainable: every deduction
+ * comes from a finding produced by the same deterministic lint pass.
  */
 export function lintArchitecture(
   architecture: ArchitectureIR,
@@ -90,11 +130,19 @@ export function lintArchitecture(
     }
   }
 
+  let isolatedComponents = 0;
+  let maxIncomingRelations = 0;
+  let maxOutgoingRelations = 0;
+
   for (const component of components) {
     const incomingCount = incoming.get(component.id) ?? 0;
     const outgoingCount = outgoing.get(component.id) ?? 0;
 
+    maxIncomingRelations = Math.max(maxIncomingRelations, incomingCount);
+    maxOutgoingRelations = Math.max(maxOutgoingRelations, outgoingCount);
+
     if (incomingCount === 0 && outgoingCount === 0) {
+      isolatedComponents += 1;
       findings.push({
         code: "component.isolated",
         severity: "warning",
@@ -106,12 +154,26 @@ export function lintArchitecture(
     }
   }
 
+  const healthScore = calculateHealthScore(findings, components.length);
+
   return {
     findings,
     summary: {
       errors: findings.filter((finding) => finding.severity === "error").length,
       warnings: findings.filter((finding) => finding.severity === "warning").length,
       info: findings.filter((finding) => finding.severity === "info").length,
+    },
+    health: {
+      score: healthScore,
+      status: getHealthStatus(healthScore),
+      metrics: {
+        components: components.length,
+        relations: relations.length,
+        connectedComponents: components.length - isolatedComponents,
+        isolatedComponents,
+        maxIncomingRelations,
+        maxOutgoingRelations,
+      },
     },
   };
 }
