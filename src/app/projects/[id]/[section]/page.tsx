@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { createProjectDesignDecision, createProjectMilestone, createProjectRequirement, getProject, listProjectDesignDecisions, listProjectMilestones, listProjectRequirements, updateProjectDesignDecisionStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { createProjectApiContract, createProjectDesignDecision, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDesignDecisions, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDesignDecisionStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
-import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
+import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
 
 const META: Record<ProjectSectionKey, { label: string; description: string }> = {
@@ -51,6 +51,9 @@ export default function ProjectSectionPage() {
   const [designDecisions, setDesignDecisions] = useState<ProjectDesignDecision[]>([]);
   const [newDesignDecision, setNewDesignDecision] = useState({ title: "", decision: "", rationale: "" });
   const [savingDesignDecision, setSavingDesignDecision] = useState(false);
+  const [apiContracts, setApiContracts] = useState<ProjectApiContract[]>([]);
+  const [newApiContract, setNewApiContract] = useState({ method: "GET" as ProjectApiMethod, path: "", title: "", description: "" });
+  const [savingApiContract, setSavingApiContract] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -72,6 +75,10 @@ export default function ProjectSectionPage() {
         if (!cancelled) {
           setProject(current);
           setArchitectures(items);
+        }
+        if (section === "api") {
+          const contractItems = await listProjectApiContracts(projectId, user.uid);
+          if (!cancelled) setApiContracts(contractItems);
         }
         if (section === "design") {
           const decisionItems = await listProjectDesignDecisions(projectId, user.uid);
@@ -186,7 +193,64 @@ export default function ProjectSectionPage() {
               </div>
             </section>
 
-            {section === "design" ? (
+            {section === "api" ? (
+              <section className="mt-6 space-y-6">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+                  <h2 className="font-semibold">Add API contract</h2>
+                  <div className="mt-5 grid gap-4">
+                    <div className="grid gap-4 md:grid-cols-[140px_1fr]">
+                      <select value={newApiContract.method} onChange={(e) => setNewApiContract((v) => ({ ...v, method: e.target.value as ProjectApiMethod }))} className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm">
+                        <option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option>
+                      </select>
+                      <input value={newApiContract.path} onChange={(e) => setNewApiContract((v) => ({ ...v, path: e.target.value }))} maxLength={300} placeholder="/api/v1/resource" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    </div>
+                    <input value={newApiContract.title} onChange={(e) => setNewApiContract((v) => ({ ...v, title: e.target.value }))} maxLength={200} placeholder="Contract title" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <textarea value={newApiContract.description} onChange={(e) => setNewApiContract((v) => ({ ...v, description: e.target.value }))} maxLength={2000} rows={3} placeholder="Purpose and expected behavior." className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <div className="flex justify-end">
+                      <button disabled={savingApiContract || !newApiContract.path.trim() || !newApiContract.title.trim()} onClick={async () => {
+                        if (!user || !project) return;
+                        setSavingApiContract(true); setError(null);
+                        try {
+                          await createProjectApiContract({ projectId: project.id, ownerId: user.uid, ...newApiContract });
+                          setApiContracts(await listProjectApiContracts(project.id, user.uid));
+                          setNewApiContract({ method: "GET", path: "", title: "", description: "" });
+                        } catch (err) { setError(err instanceof Error ? err.message : "API contract could not be created."); }
+                        finally { setSavingApiContract(false); }
+                      }} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50">{savingApiContract ? "Adding..." : "Add contract"}</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {apiContracts.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No API contracts defined yet.</div>
+                  ) : apiContracts.map((contract) => (
+                    <div key={contract.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-md border border-blue-900/60 bg-blue-950/40 px-2 py-1 text-[10px] font-semibold text-blue-300">{contract.method}</span>
+                            <code className="text-sm text-slate-300">{contract.path}</code>
+                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500">{contract.status}</span>
+                          </div>
+                          <h3 className="mt-3 font-semibold">{contract.title}</h3>
+                          {contract.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{contract.description}</p>}
+                        </div>
+                        <select value={contract.status} onChange={async (e) => {
+                          if (!user || !project) return;
+                          const status = e.target.value as ProjectApiStatus;
+                          try {
+                            await updateProjectApiContractStatus({ projectId: project.id, contractId: contract.id, ownerId: user.uid, status });
+                            setApiContracts((items) => items.map((item) => item.id === contract.id ? { ...item, status } : item));
+                          } catch (err) { setError(err instanceof Error ? err.message : "API contract status could not be updated."); }
+                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                          <option value="draft">Draft</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : section === "design" ? (
               <section className="mt-6 space-y-6">
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
                   <h2 className="font-semibold">Add design decision</h2>
