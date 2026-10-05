@@ -214,3 +214,24 @@ export function isValidProjectInfrastructureResource(
     isProjectInfrastructureResourceStatus(resource.status)
   );
 }
+
+
+export function isProjectCodeArtifactStatus(value: unknown): value is import("./types").ProjectCodeArtifactStatus {
+  return value === "planned" || value === "active" || value === "deprecated";
+}
+
+export function isValidProjectCodeArtifact(
+  artifact: import("./types").ProjectCodeArtifact,
+): boolean {
+  return (
+    typeof artifact.id === "string" && artifact.id.length > 0 &&
+    typeof artifact.projectId === "string" && artifact.projectId.length > 0 &&
+    typeof artifact.ownerId === "string" && artifact.ownerId.length > 0 &&
+    typeof artifact.name === "string" && artifact.name.trim().length > 0 && artifact.name.length <= 160 &&
+    typeof artifact.language === "string" && artifact.language.trim().length > 0 && artifact.language.length <= 100 &&
+    typeof artifact.runtime === "string" && artifact.runtime.length <= 100 &&
+    typeof artifact.path === "string" && artifact.path.trim().length > 0 && artifact.path.length <= 500 &&
+    typeof artifact.purpose === "string" && artifact.purpose.length <= 2000 &&
+    isProjectCodeArtifactStatus(artifact.status)
+  );
+}
