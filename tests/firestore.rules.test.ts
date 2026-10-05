@@ -846,6 +846,124 @@ describe("Architecture snapshot security rules", () => {
 });
 
 
+describe("Architecture pull request security rules", () => {
+  const branchId = "branch-pr-a";
+  const pullRequestId = branchId;
+
+  async function seedPullRequest() {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "workspaces", workspaceA), {
+        ownerId: userA.uid,
+        name: "User A Workspace",
+      });
+      await setDoc(doc(context.firestore(), "architectures", architectureA), {
+        ownerId: userA.uid,
+        workspaceId: workspaceA,
+        name: "Architecture A",
+        nodes: [],
+        edges: [],
+      });
+      await setDoc(
+        doc(context.firestore(), "architectures", architectureA, "snapshots", "snapshot-pr"),
+        {
+          architectureId: architectureA,
+          workspaceId: workspaceA,
+          ownerId: userA.uid,
+          createdBy: userA.uid,
+          name: "PR base",
+          architectureIR: { schemaVersion: 1, components: [], relations: [] },
+          canvasLayout: { nodes: [], edges: [] },
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      );
+      await setDoc(
+        doc(context.firestore(), "architectures", architectureA, "branches", branchId),
+        {
+          architectureId: architectureA,
+          workspaceId: workspaceA,
+          ownerId: userA.uid,
+          createdBy: userA.uid,
+          name: "feature/pr-review",
+          description: "",
+          baseSnapshotId: "snapshot-pr",
+          status: "active",
+          pullRequestId,
+          architectureIR: { schemaVersion: 1, components: [], relations: [] },
+          canvasLayout: { nodes: [], edges: [] },
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      );
+      await setDoc(
+        doc(context.firestore(), "architectures", architectureA, "pullRequests", pullRequestId),
+        {
+          architectureId: architectureA,
+          workspaceId: workspaceA,
+          ownerId: userA.uid,
+          createdBy: userA.uid,
+          sourceBranchId: branchId,
+          sourceBranchName: "feature/pr-review",
+          baseSnapshotId: "snapshot-pr",
+          title: "Review architecture change",
+          description: "",
+          status: "open",
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+          updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      );
+    });
+  }
+
+  test("an open pull request cannot be marked merged while its branch is active", async () => {
+    await seedPullRequest();
+    await assertFails(
+      updateDoc(
+        doc(
+          authenticatedDb(userA),
+          "architectures",
+          architectureA,
+          "pullRequests",
+          pullRequestId,
+        ),
+        {
+          status: "merged",
+          updatedAt: serverTimestamp(),
+        },
+      ),
+    );
+  });
+
+  test("a pull request can become merged only in the same transaction that merges its branch", async () => {
+    await seedPullRequest();
+    const db = authenticatedDb(userA);
+
+    await assertSucceeds(
+      runTransaction(db, async (transaction) => {
+        const branchRef = doc(db, "architectures", architectureA, "branches", branchId);
+        const pullRequestRef = doc(
+          db,
+          "architectures",
+          architectureA,
+          "pullRequests",
+          pullRequestId,
+        );
+
+        transaction.update(branchRef, {
+          name: "feature/pr-review",
+          description: "",
+          status: "merged",
+          architectureIR: { schemaVersion: 1, components: [], relations: [] },
+          canvasLayout: { nodes: [], edges: [] },
+        });
+        transaction.update(pullRequestRef, {
+          status: "merged",
+          updatedAt: serverTimestamp(),
+        });
+      }),
+    );
+  });
+});
+
+
 describe("Project execution task security rules", () => {
   const executionProject = "project-execution-a";
   const archivedProject = "project-execution-archived";
