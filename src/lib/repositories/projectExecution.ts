@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { isProjectExecutionTaskPriority, isProjectExecutionTaskStatus, isProjectSectionKey, isValidProjectExecutionTask } from "@/domain/project/validation";
 import type { ProjectExecutionTask, ProjectExecutionTaskPriority, ProjectExecutionTaskStatus, ProjectSectionKey } from "@/domain/project/types";
@@ -65,6 +65,58 @@ export async function createProjectExecutionTask(input: {
     createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
   });
   return taskRef.id;
+}
+
+export async function updateProjectExecutionTask(input: {
+  projectId: string;
+  taskId: string;
+  ownerId: string;
+  title: string;
+  description?: string;
+  priority: ProjectExecutionTaskPriority;
+  status: ProjectExecutionTaskStatus;
+  section?: ProjectSectionKey;
+  sourceId?: string;
+  dueDate?: string;
+}): Promise<void> {
+  if (!isProjectExecutionTaskPriority(input.priority)) throw new Error("Invalid execution task priority.");
+  if (!isProjectExecutionTaskStatus(input.status)) throw new Error("Invalid execution task status.");
+
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const taskRef = doc(projectRef, PROJECT_EXECUTION_SUBCOLLECTION, input.taskId);
+  const snapshot = await getDoc(taskRef);
+  if (!snapshot.exists()) throw new Error("Execution task not found.");
+
+  const existing = toProjectExecutionTask(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId) throw new Error("You do not have access to this task.");
+
+  const task: ProjectExecutionTask = {
+    id: existing.id,
+    projectId: existing.projectId,
+    ownerId: existing.ownerId,
+    title: input.title.trim(),
+    description: input.description?.trim() || undefined,
+    priority: input.priority,
+    status: input.status,
+    section: input.section,
+    sourceId: input.sourceId?.trim() || undefined,
+    dueDate: input.dueDate || undefined,
+    createdAt: existing.createdAt,
+    updatedAt: existing.updatedAt,
+  };
+
+  if (!isValidProjectExecutionTask(task)) throw new Error("Invalid execution task.");
+
+  await updateDoc(taskRef, {
+    title: task.title,
+    ...(task.description ? { description: task.description } : { description: deleteField() }),
+    priority: task.priority,
+    status: task.status,
+    ...(task.section ? { section: task.section } : { section: deleteField() }),
+    ...(task.sourceId ? { sourceId: task.sourceId } : { sourceId: deleteField() }),
+    ...(task.dueDate ? { dueDate: task.dueDate } : { dueDate: deleteField() }),
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function updateProjectExecutionTaskStatus(input: {
