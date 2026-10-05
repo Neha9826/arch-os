@@ -115,3 +115,20 @@ export type Project = {
   createdAt?: unknown;
   updatedAt?: unknown;
 };
+
+
+export type ProjectInfrastructureResourceStatus = "planned" | "active" | "retired";
+export type ProjectInfrastructureEnvironment = "development" | "staging" | "production" | "shared";
+
+export type ProjectInfrastructureResource = {
+  id: string;
+  projectId: string;
+  ownerId: string;
+  name: string;
+  provider: string;
+  environment: ProjectInfrastructureEnvironment;
+  purpose: string;
+  status: ProjectInfrastructureResourceStatus;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
