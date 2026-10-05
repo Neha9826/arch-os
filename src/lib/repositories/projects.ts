@@ -29,6 +29,8 @@ import {
   isProjectApiMethod,
   isProjectApiStatus,
   isValidProjectApiContract,
+  isProjectDatabaseEntityStatus,
+  isValidProjectDatabaseEntity,
 } from "@/domain/project/validation";
 import type {
   Project,
@@ -46,6 +48,8 @@ import type {
   ProjectApiContract,
   ProjectApiMethod,
   ProjectApiStatus,
+  ProjectDatabaseEntity,
+  ProjectDatabaseEntityStatus,
 } from "@/domain/project/types";
 
 const PROJECTS_COLLECTION = "projects";
@@ -540,4 +544,71 @@ export async function updateProjectApiContractStatus(input: {
   const contract = toProjectApiContract(snapshot.id, snapshot.data());
   if (contract.ownerId !== input.ownerId) throw new Error("You do not have access to this API contract.");
   await updateDoc(contractRef, { status: input.status, updatedAt: serverTimestamp() });
+}
+
+
+const PROJECT_DATABASE_SUBCOLLECTION = "databaseEntities";
+
+function toProjectDatabaseEntity(id: string, data: Record<string, unknown>): ProjectDatabaseEntity {
+  return {
+    id,
+    projectId: typeof data.projectId === "string" ? data.projectId : "",
+    ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
+    name: typeof data.name === "string" ? data.name : "",
+    purpose: typeof data.purpose === "string" ? data.purpose : "",
+    status: isProjectDatabaseEntityStatus(data.status) ? data.status : "draft",
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+}
+
+export async function listProjectDatabaseEntities(projectId: string, ownerId: string): Promise<ProjectDatabaseEntity[]> {
+  const projectRef = await assertActiveProjectOwner(projectId, ownerId);
+  const snapshot = await getDocs(collection(projectRef, PROJECT_DATABASE_SUBCOLLECTION));
+  return snapshot.docs.map((item) => toProjectDatabaseEntity(item.id, item.data()));
+}
+
+export async function createProjectDatabaseEntity(input: {
+  projectId: string;
+  ownerId: string;
+  name: string;
+  purpose: string;
+}): Promise<string> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const entityRef = doc(collection(projectRef, PROJECT_DATABASE_SUBCOLLECTION));
+  const entity: ProjectDatabaseEntity = {
+    id: entityRef.id,
+    projectId: input.projectId,
+    ownerId: input.ownerId,
+    name: input.name.trim(),
+    purpose: input.purpose.trim(),
+    status: "draft",
+  };
+  if (!isValidProjectDatabaseEntity(entity)) throw new Error("Invalid project database entity.");
+  await setDoc(entityRef, {
+    projectId: entity.projectId,
+    ownerId: entity.ownerId,
+    name: entity.name,
+    purpose: entity.purpose,
+    status: entity.status,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return entityRef.id;
+}
+
+export async function updateProjectDatabaseEntityStatus(input: {
+  projectId: string;
+  entityId: string;
+  ownerId: string;
+  status: ProjectDatabaseEntityStatus;
+}): Promise<void> {
+  if (!isProjectDatabaseEntityStatus(input.status)) throw new Error("Invalid database entity status.");
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const entityRef = doc(projectRef, PROJECT_DATABASE_SUBCOLLECTION, input.entityId);
+  const snapshot = await getDoc(entityRef);
+  if (!snapshot.exists()) throw new Error("Database entity not found.");
+  const entity = toProjectDatabaseEntity(snapshot.id, snapshot.data());
+  if (entity.ownerId !== input.ownerId) throw new Error("You do not have access to this database entity.");
+  await updateDoc(entityRef, { status: input.status, updatedAt: serverTimestamp() });
 }
