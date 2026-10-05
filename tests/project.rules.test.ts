@@ -90,7 +90,7 @@ const projectData = {
   name: "Commerce Platform",
   description: "Engineering project",
   status: "active",
-  sections: defaultSections,
+  sections: defaultSections,\n  planning: { objective: "", scope: "", constraints: "", successCriteria: "" },
 };
 
 describe("Project security rules", () => {
