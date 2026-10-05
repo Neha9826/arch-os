@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { createProjectApiContract, createProjectDesignDecision, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDesignDecisions, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDesignDecisionStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { createProjectApiContract, createProjectDatabaseEntity, createProjectDesignDecision, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
-import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
+import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
 
 const META: Record<ProjectSectionKey, { label: string; description: string }> = {
@@ -54,6 +54,9 @@ export default function ProjectSectionPage() {
   const [apiContracts, setApiContracts] = useState<ProjectApiContract[]>([]);
   const [newApiContract, setNewApiContract] = useState({ method: "GET" as ProjectApiMethod, path: "", title: "", description: "" });
   const [savingApiContract, setSavingApiContract] = useState(false);
+  const [databaseEntities, setDatabaseEntities] = useState<ProjectDatabaseEntity[]>([]);
+  const [newDatabaseEntity, setNewDatabaseEntity] = useState({ name: "", purpose: "" });
+  const [savingDatabaseEntity, setSavingDatabaseEntity] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -75,6 +78,10 @@ export default function ProjectSectionPage() {
         if (!cancelled) {
           setProject(current);
           setArchitectures(items);
+        }
+        if (section === "database") {
+          const entityItems = await listProjectDatabaseEntities(projectId, user.uid);
+          if (!cancelled) setDatabaseEntities(entityItems);
         }
         if (section === "api") {
           const contractItems = await listProjectApiContracts(projectId, user.uid);
@@ -193,7 +200,53 @@ export default function ProjectSectionPage() {
               </div>
             </section>
 
-            {section === "api" ? (
+            {section === "database" ? (
+              <section className="mt-6 space-y-6">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+                  <h2 className="font-semibold">Add database entity</h2>
+                  <div className="mt-5 grid gap-4">
+                    <input value={newDatabaseEntity.name} onChange={(e) => setNewDatabaseEntity((v) => ({ ...v, name: e.target.value }))} maxLength={120} placeholder="Table / entity name" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <textarea value={newDatabaseEntity.purpose} onChange={(e) => setNewDatabaseEntity((v) => ({ ...v, purpose: e.target.value }))} maxLength={2000} rows={4} placeholder="What data does this entity own?" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <div className="flex justify-end">
+                      <button disabled={savingDatabaseEntity || !newDatabaseEntity.name.trim()} onClick={async () => {
+                        if (!user || !project) return;
+                        setSavingDatabaseEntity(true); setError(null);
+                        try {
+                          await createProjectDatabaseEntity({ projectId: project.id, ownerId: user.uid, ...newDatabaseEntity });
+                          setDatabaseEntities(await listProjectDatabaseEntities(project.id, user.uid));
+                          setNewDatabaseEntity({ name: "", purpose: "" });
+                        } catch (err) { setError(err instanceof Error ? err.message : "Database entity could not be created."); }
+                        finally { setSavingDatabaseEntity(false); }
+                      }} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50">{savingDatabaseEntity ? "Adding..." : "Add entity"}</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {databaseEntities.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No database entities defined yet.</div>
+                  ) : databaseEntities.map((entity) => (
+                    <div key={entity.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                        <div>
+                          <code className="text-sm text-blue-300">{entity.name}</code>
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{entity.purpose || "No purpose documented."}</p>
+                        </div>
+                        <select value={entity.status} onChange={async (e) => {
+                          if (!user || !project) return;
+                          const status = e.target.value as ProjectDatabaseEntityStatus;
+                          try {
+                            await updateProjectDatabaseEntityStatus({ projectId: project.id, entityId: entity.id, ownerId: user.uid, status });
+                            setDatabaseEntities((items) => items.map((item) => item.id === entity.id ? { ...item, status } : item));
+                          } catch (err) { setError(err instanceof Error ? err.message : "Database entity status could not be updated."); }
+                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                          <option value="draft">Draft</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : section === "api" ? (
               <section className="mt-6 space-y-6">
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
                   <h2 className="font-semibold">Add API contract</h2>
