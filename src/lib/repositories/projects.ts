@@ -6,6 +6,7 @@ import {
   getDocs,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
@@ -88,21 +89,15 @@ export async function createProject(input: {
 
   assertValidProject(project);
 
-  await updateDoc(
-    doc(db, PROJECTS_COLLECTION, projectRef.id),
-    {},
-  ).catch(async () => {
-    const { setDoc } = await import("firebase/firestore");
-    await setDoc(projectRef, {
-      workspaceId: project.workspaceId,
-      ownerId: project.ownerId,
-      createdBy: project.createdBy,
-      name: project.name,
-      ...(project.description ? { description: project.description } : {}),
-      status: project.status,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+  await setDoc(projectRef, {
+    workspaceId: project.workspaceId,
+    ownerId: project.ownerId,
+    createdBy: project.createdBy,
+    name: project.name,
+    ...(project.description ? { description: project.description } : {}),
+    status: project.status,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
 
   return projectRef.id;
