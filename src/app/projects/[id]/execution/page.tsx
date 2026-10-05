@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, CircleAlert, ListTodo, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleAlert, ListTodo, Pencil, Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { createProjectExecutionTask, deleteProjectExecutionTask, listProjectExecutionTasks, updateProjectExecutionTaskStatus } from "@/lib/repositories/projectExecution";
+import { createProjectExecutionTask, deleteProjectExecutionTask, listProjectExecutionTasks, updateProjectExecutionTask, updateProjectExecutionTaskStatus } from "@/lib/repositories/projectExecution";
 import type { ProjectExecutionTask, ProjectExecutionTaskPriority, ProjectExecutionTaskStatus, ProjectSectionKey } from "@/domain/project/types";
 import { getProject } from "@/lib/repositories/projects";
 
@@ -23,6 +23,8 @@ export default function ProjectExecutionPage() {
   const [projectName, setProjectName] = useState("");
   const [fetching, setFetching] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<ProjectExecutionTask | null>(null);
+  const [editingSaving, setEditingSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newTask, setNewTask] = useState<{ title: string; description: string; priority: ProjectExecutionTaskPriority; section: ProjectSectionKey | ""; sourceId: string; dueDate: string }>({
     title: "", description: "", priority: "medium", section: "", sourceId: "", dueDate: "",
@@ -77,6 +79,37 @@ export default function ProjectExecutionPage() {
     finally { setSaving(false); }
   };
 
+  const startEditing = (task: ProjectExecutionTask) => {
+    setEditing({ ...task });
+    setError(null);
+  };
+
+  const saveEdit = async () => {
+    if (!user || !editing || !editing.title.trim() || editingSaving) return;
+    setEditingSaving(true);
+    setError(null);
+    try {
+      await updateProjectExecutionTask({
+        projectId,
+        taskId: editing.id,
+        ownerId: user.uid,
+        title: editing.title,
+        description: editing.description,
+        priority: editing.priority,
+        status: editing.status,
+        section: editing.section,
+        sourceId: editing.sourceId,
+        dueDate: editing.dueDate,
+      });
+      setTasks((items) => items.map((item) => item.id === editing.id ? { ...item, ...editing, title: editing.title.trim(), description: editing.description?.trim() || undefined, sourceId: editing.sourceId?.trim() || undefined, section: editing.section || undefined, dueDate: editing.dueDate || undefined } : item));
+      setEditing(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Task could not be updated.");
+    } finally {
+      setEditingSaving(false);
+    }
+  };
+
   const changeStatus = async (task: ProjectExecutionTask, status: ProjectExecutionTaskStatus) => {
     if (!user) return;
     try {
@@ -124,12 +157,45 @@ export default function ProjectExecutionPage() {
             <article key={task.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0"><div className="flex flex-wrap items-center gap-2">{task.status === "done" ? <CheckCircle2 size={16} className="text-emerald-400" /> : task.status === "blocked" ? <CircleAlert size={16} className="text-red-400" /> : <ListTodo size={16} className="text-blue-400" />}<h3 className="font-semibold">{task.title}</h3><span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{task.priority}</span>{task.section ? <span className="rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] text-slate-500">{SECTION_LABELS[task.section]}</span> : null}</div>{task.description ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-400">{task.description}</p> : null}<div className="mt-3 flex flex-wrap gap-3 text-[11px] text-slate-600">{task.sourceId ? <span>Source: {task.sourceId}</span> : null}{task.dueDate ? <span>Due: {task.dueDate}</span> : null}</div></div>
-                <div className="flex items-center gap-2"><select value={task.status} onChange={(e) => void changeStatus(task, e.target.value as ProjectExecutionTaskStatus)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">{Object.entries(STATUS_META).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><button onClick={() => void removeTask(task)} className="rounded-lg border border-slate-800 p-2 text-slate-500 hover:border-red-900 hover:text-red-400" title="Delete task"><Trash2 size={15} /></button></div>
+                <div className="flex items-center gap-2"><select value={task.status} onChange={(e) => void changeStatus(task, e.target.value as ProjectExecutionTaskStatus)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">{Object.entries(STATUS_META).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><button onClick={() => startEditing(task)} className="rounded-lg border border-slate-800 p-2 text-slate-500 hover:border-blue-900 hover:text-blue-400" title="Edit task"><Pencil size={15} /></button><button onClick={() => void removeTask(task)} className="rounded-lg border border-slate-800 p-2 text-slate-500 hover:border-red-900 hover:text-red-400" title="Delete task"><Trash2 size={15} /></button></div>
               </div>
             </article>
           ))}
         </section>
       </div>
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-semibold"><Pencil size={18} className="text-blue-400" /> Edit execution task</h2>
+                <p className="mt-1 text-xs text-slate-500">Update task details without changing its project ownership.</p>
+              </div>
+              <button onClick={() => setEditing(null)} className="text-slate-500 hover:text-slate-300">✕</button>
+            </div>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <input value={editing.title} onChange={(e) => setEditing((v) => v ? { ...v, title: e.target.value } : v)} maxLength={200} placeholder="Task title" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+              <select value={editing.priority} onChange={(e) => setEditing((v) => v ? { ...v, priority: e.target.value as ProjectExecutionTaskPriority } : v)} className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm">
+                <option value="low">Low priority</option><option value="medium">Medium priority</option><option value="high">High priority</option><option value="critical">Critical priority</option>
+              </select>
+              <textarea value={editing.description ?? ""} onChange={(e) => setEditing((v) => v ? { ...v, description: e.target.value } : v)} maxLength={2000} rows={4} placeholder="What needs to be done?" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500 md:col-span-2" />
+              <select value={editing.section ?? ""} onChange={(e) => setEditing((v) => v ? { ...v, section: e.target.value as ProjectSectionKey | undefined } : v)} className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm">
+                <option value="">No engineering section</option>{Object.entries(SECTION_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              </select>
+              <input value={editing.sourceId ?? ""} onChange={(e) => setEditing((v) => v ? { ...v, sourceId: e.target.value } : v)} maxLength={160} placeholder="Source artifact ID (optional)" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+              <input type="date" value={editing.dueDate ?? ""} onChange={(e) => setEditing((v) => v ? { ...v, dueDate: e.target.value } : v)} className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+              <select value={editing.status} onChange={(e) => setEditing((v) => v ? { ...v, status: e.target.value as ProjectExecutionTaskStatus } : v)} className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm">
+                {Object.entries(STATUS_META).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </div>
+            <div className="mt-5 flex justify-end gap-3">
+              <button onClick={() => setEditing(null)} className="rounded-lg px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">Cancel</button>
+              <button disabled={editingSaving || !editing.title.trim()} onClick={() => void saveEdit()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50">{editingSaving ? "Saving..." : "Save changes"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
