@@ -118,6 +118,45 @@ service cloud.firestore {
       allow delete: if isProjectOwner();
     }
 
+    match /projects/{projectId}/apiContracts/{contractId} {
+      function isParentProjectOwner() {
+        return isSignedIn()
+          && exists(/databases/$(database)/documents/projects/$(projectId))
+          && get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid;
+      }
+
+      allow get, list: if isParentProjectOwner();
+
+      allow create: if isParentProjectOwner()
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active"
+        && request.resource.data.projectId == projectId
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.method in ["GET", "POST", "PUT", "PATCH", "DELETE"]
+        && request.resource.data.path is string
+        && request.resource.data.path.size() > 1
+        && request.resource.data.path.size() <= 300
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200
+        && (!request.resource.data.keys().hasAll(["description"]) || request.resource.data.description is string)
+        && (!request.resource.data.keys().hasAll(["description"]) || request.resource.data.description.size() <= 2000)
+        && request.resource.data.status == "draft";
+
+      allow update: if isParentProjectOwner()
+        && resource.data.projectId == projectId
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.projectId == resource.data.projectId
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.method == resource.data.method
+        && request.resource.data.path == resource.data.path
+        && request.resource.data.title == resource.data.title
+        && request.resource.data.description == resource.data.description
+        && request.resource.data.status in ["draft", "active", "deprecated"]
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
+
+      allow delete: if isParentProjectOwner() && resource.data.ownerId == request.auth.uid;
+    }
+
     match /projects/{projectId}/designDecisions/{decisionId} {
       function isParentProjectOwner() {
         return isSignedIn()
