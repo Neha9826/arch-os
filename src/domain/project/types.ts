@@ -33,6 +33,20 @@ export type ProjectRequirement = {
   updatedAt?: unknown;
 };
 
+export type ProjectMilestoneStatus = "planned" | "in-progress" | "done";
+
+export type ProjectMilestone = {
+  id: string;
+  projectId: string;
+  ownerId: string;
+  title: string;
+  description?: string;
+  status: ProjectMilestoneStatus;
+  targetDate?: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
 export type ProjectPlanning = {
   objective: string;
   scope: string;
