@@ -132,3 +132,20 @@ export type ProjectInfrastructureResource = {
   createdAt?: unknown;
   updatedAt?: unknown;
 };
+
+
+export type ProjectCodeArtifactStatus = "planned" | "active" | "deprecated";
+
+export type ProjectCodeArtifact = {
+  id: string;
+  projectId: string;
+  ownerId: string;
+  name: string;
+  language: string;
+  runtime: string;
+  path: string;
+  purpose: string;
+  status: ProjectCodeArtifactStatus;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
