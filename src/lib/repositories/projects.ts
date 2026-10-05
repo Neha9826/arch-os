@@ -17,7 +17,7 @@ import {
   isProjectSectionKey,
   isValidProjectDescription,
   isValidProjectName,
-  isProjectSectionStatus,
+  isProjectSectionStatus,\n  isValidProjectPlanning,
 } from "@/domain/project/validation";
 import type {
   Project,
@@ -39,7 +39,7 @@ function toProject(id: string, data: Record<string, unknown>): Project {
     description:
       typeof data.description === "string" ? data.description : undefined,
     status: data.status === "archived" ? "archived" : "active",
-    sections: data.sections as Project["sections"],
+    planning: data.planning as Project["planning"],\n    sections: data.sections as Project["sections"],
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };
@@ -104,7 +104,7 @@ export async function createProject(input: {
     ownerId: project.ownerId,
     createdBy: project.createdBy,
     name: project.name,
-    ...(project.description ? { description: project.description } : {}),
+    ...(project.description ? { description: project.description } : {}),\n    planning: { objective: "", scope: "", constraints: "", successCriteria: "" },
     status: project.status,
     sections: project.sections,
     createdAt: serverTimestamp(),
@@ -176,6 +176,34 @@ export async function updateProjectSectionStatus(input: {
 
     transaction.update(projectRef, {
       sections,
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+\nexport async function updateProjectPlanning(input: {
+  projectId: string;
+  ownerId: string;
+  planning: ProjectPlanning;
+}): Promise<void> {
+  if (!isValidProjectPlanning(input.planning)) {
+    throw new Error("Invalid project planning data.");
+  }
+
+  const projectRef = doc(db, PROJECTS_COLLECTION, input.projectId);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(projectRef);
+    if (!snapshot.exists()) throw new Error("Project not found.");
+
+    const project = toProject(snapshot.id, snapshot.data());
+    if (project.ownerId !== input.ownerId) {
+      throw new Error("You do not have access to this project.");
+    }
+    if (project.status !== "active") {
+      throw new Error("Archived projects are read-only.");
+    }
+
+    transaction.update(projectRef, {
+      planning: input.planning,
       updatedAt: serverTimestamp(),
     });
   });
