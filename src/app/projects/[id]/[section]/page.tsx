@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { createProjectApiContract, createProjectCodeArtifact, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { createProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
-import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
+import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectTestCase, type ProjectTestStatus, type ProjectTestType, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
 
 const META: Record<ProjectSectionKey, { label: string; description: string }> = {
@@ -63,6 +63,9 @@ export default function ProjectSectionPage() {
   const [codeArtifacts, setCodeArtifacts] = useState<ProjectCodeArtifact[]>([]);
   const [newCodeArtifact, setNewCodeArtifact] = useState({ name: "", language: "", runtime: "", path: "", purpose: "" });
   const [savingCodeArtifact, setSavingCodeArtifact] = useState(false);
+  const [testCases, setTestCases] = useState<ProjectTestCase[]>([]);
+  const [newTestCase, setNewTestCase] = useState({ name: "", type: "unit" as ProjectTestType, path: "", purpose: "" });
+  const [savingTestCase, setSavingTestCase] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -88,6 +91,10 @@ export default function ProjectSectionPage() {
         if (section === "infrastructure") {
           const resourceItems = await listProjectInfrastructureResources(projectId, user.uid);
           if (!cancelled) setInfrastructureResources(resourceItems);
+        }
+        if (section === "testing") {
+          const testItems = await listProjectTestCases(projectId, user.uid);
+          if (!cancelled) setTestCases(testItems);
         }
         if (section === "code") {
           const artifactItems = await listProjectCodeArtifacts(projectId, user.uid);
@@ -214,7 +221,62 @@ export default function ProjectSectionPage() {
               </div>
             </section>
 
-            {section === "code" ? (
+            {section === "testing" ? (
+              <section className="mt-6 space-y-6">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+                  <h2 className="font-semibold">Add test area</h2>
+                  <p className="mt-1 text-sm text-slate-500">Track what must be verified without replacing Vitest, CI, or other test runners.</p>
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <input value={newTestCase.name} onChange={(e) => setNewTestCase((v) => ({ ...v, name: e.target.value }))} maxLength={200} placeholder="Test area / suite name" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <select value={newTestCase.type} onChange={(e) => setNewTestCase((v) => ({ ...v, type: e.target.value as ProjectTestType }))} className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500">
+                      <option value="unit">Unit</option><option value="integration">Integration</option><option value="e2e">E2E</option><option value="security">Security</option><option value="performance">Performance</option><option value="other">Other</option>
+                    </select>
+                    <input value={newTestCase.path} onChange={(e) => setNewTestCase((v) => ({ ...v, path: e.target.value }))} maxLength={500} placeholder="Test file / suite path" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500 md:col-span-2" />
+                    <textarea value={newTestCase.purpose} onChange={(e) => setNewTestCase((v) => ({ ...v, purpose: e.target.value }))} maxLength={2000} rows={3} placeholder="What does this test area verify?" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500 md:col-span-2" />
+                    <div className="flex justify-end md:col-span-2">
+                      <button disabled={savingTestCase || !newTestCase.name.trim() || !newTestCase.path.trim()} onClick={async () => {
+                        if (!user || !project) return;
+                        setSavingTestCase(true); setError(null);
+                        try {
+                          await createProjectTestCase({ projectId: project.id, ownerId: user.uid, ...newTestCase });
+                          setTestCases(await listProjectTestCases(project.id, user.uid));
+                          setNewTestCase({ name: "", type: "unit", path: "", purpose: "" });
+                        } catch (err) { setError(err instanceof Error ? err.message : "Test area could not be created."); }
+                        finally { setSavingTestCase(false); }
+                      }} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50">{savingTestCase ? "Adding..." : "Add test area"}</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {testCases.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No test areas defined yet.</div>
+                  ) : testCases.map((testCase) => (
+                    <div key={testCase.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-semibold">{testCase.name}</h3>
+                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{testCase.type}</span>
+                          </div>
+                          <p className="mt-2 font-mono text-xs text-slate-500">{testCase.path}</p>
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{testCase.purpose || "No purpose documented."}</p>
+                        </div>
+                        <select value={testCase.status} onChange={async (e) => {
+                          if (!user || !project) return;
+                          const status = e.target.value as ProjectTestStatus;
+                          try {
+                            await updateProjectTestCaseStatus({ projectId: project.id, testCaseId: testCase.id, ownerId: user.uid, status });
+                            setTestCases((items) => items.map((item) => item.id === testCase.id ? { ...item, status } : item));
+                          } catch (err) { setError(err instanceof Error ? err.message : "Test status could not be updated."); }
+                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                          <option value="planned">Planned</option><option value="passing">Passing</option><option value="failing">Failing</option><option value="skipped">Skipped</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : section === "code" ? (
               <section className="mt-6 space-y-6">
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
                   <h2 className="font-semibold">Add code artifact</h2>
