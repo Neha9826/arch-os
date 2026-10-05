@@ -39,7 +39,9 @@ export default function ProjectSectionPage() {
   const [architectures, setArchitectures] = useState<Architecture[]>([]);
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);\n  const [planning, setPlanning] = useState<ProjectPlanning>({ objective: "", scope: "", constraints: "", successCriteria: "" });\n  const [savingPlanning, setSavingPlanning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [planning, setPlanning] = useState<ProjectPlanning>({ objective: "", scope: "", constraints: "", successCriteria: "" });
+  const [savingPlanning, setSavingPlanning] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
