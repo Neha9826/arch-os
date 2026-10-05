@@ -174,3 +174,19 @@ export function isValidProjectApiContract(contract: import("./types").ProjectApi
     isProjectApiStatus(contract.status)
   );
 }
+
+
+export function isProjectDatabaseEntityStatus(value: unknown): value is import("./types").ProjectDatabaseEntityStatus {
+  return value === "draft" || value === "active" || value === "deprecated";
+}
+
+export function isValidProjectDatabaseEntity(entity: import("./types").ProjectDatabaseEntity): boolean {
+  return (
+    typeof entity.id === "string" && entity.id.length > 0 &&
+    typeof entity.projectId === "string" && entity.projectId.length > 0 &&
+    typeof entity.ownerId === "string" && entity.ownerId.length > 0 &&
+    typeof entity.name === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(entity.name) && entity.name.length <= 120 &&
+    typeof entity.purpose === "string" && entity.purpose.length <= 2000 &&
+    isProjectDatabaseEntityStatus(entity.status)
+  );
+}
