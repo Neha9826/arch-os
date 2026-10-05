@@ -39,6 +39,9 @@ import {
   isProjectTestType,
   isProjectTestStatus,
   isValidProjectTestCase,
+  isProjectDocumentationType,
+  isProjectDocumentationStatus,
+  isValidProjectDocumentationEntry,
 } from "@/domain/project/validation";
 import type {
   Project,
@@ -66,6 +69,9 @@ import type {
   ProjectTestCase,
   ProjectTestType,
   ProjectTestStatus,
+  ProjectDocumentationEntry,
+  ProjectDocumentationType,
+  ProjectDocumentationStatus,
 } from "@/domain/project/types";
 
 const PROJECTS_COLLECTION = "projects";
@@ -935,4 +941,79 @@ export async function updateProjectTestCaseStatus(input: {
     status: input.status,
     updatedAt: serverTimestamp(),
   });
+}
+
+
+const PROJECT_DOCUMENTATION_SUBCOLLECTION = "documentation";
+
+function toProjectDocumentationEntry(id: string, data: Record<string, unknown>): ProjectDocumentationEntry {
+  return {
+    id,
+    projectId: typeof data.projectId === "string" ? data.projectId : "",
+    ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
+    title: typeof data.title === "string" ? data.title : "",
+    type: isProjectDocumentationType(data.type) ? data.type : "other",
+    path: typeof data.path === "string" ? data.path : "",
+    summary: typeof data.summary === "string" ? data.summary : "",
+    status: isProjectDocumentationStatus(data.status) ? data.status : "planned",
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+}
+
+export async function listProjectDocumentation(projectId: string, ownerId: string): Promise<ProjectDocumentationEntry[]> {
+  const projectRef = await assertActiveProjectOwner(projectId, ownerId);
+  const snapshot = await getDocs(collection(projectRef, PROJECT_DOCUMENTATION_SUBCOLLECTION));
+  return snapshot.docs.map((item) => toProjectDocumentationEntry(item.id, item.data()));
+}
+
+export async function createProjectDocumentation(input: {
+  projectId: string;
+  ownerId: string;
+  title: string;
+  type: ProjectDocumentationType;
+  path: string;
+  summary: string;
+}): Promise<string> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const documentationRef = doc(collection(projectRef, PROJECT_DOCUMENTATION_SUBCOLLECTION));
+  const entry: ProjectDocumentationEntry = {
+    id: documentationRef.id,
+    projectId: input.projectId,
+    ownerId: input.ownerId,
+    title: input.title.trim(),
+    type: input.type,
+    path: input.path.trim(),
+    summary: input.summary.trim(),
+    status: "planned",
+  };
+  if (!isValidProjectDocumentationEntry(entry)) throw new Error("Invalid project documentation entry.");
+  await setDoc(documentationRef, {
+    projectId: entry.projectId,
+    ownerId: entry.ownerId,
+    title: entry.title,
+    type: entry.type,
+    path: entry.path,
+    summary: entry.summary,
+    status: entry.status,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return documentationRef.id;
+}
+
+export async function updateProjectDocumentationStatus(input: {
+  projectId: string;
+  documentationId: string;
+  ownerId: string;
+  status: ProjectDocumentationStatus;
+}): Promise<void> {
+  if (!isProjectDocumentationStatus(input.status)) throw new Error("Invalid project documentation status.");
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const documentationRef = doc(projectRef, PROJECT_DOCUMENTATION_SUBCOLLECTION, input.documentationId);
+  const snapshot = await getDoc(documentationRef);
+  if (!snapshot.exists()) throw new Error("Project documentation entry not found.");
+  const entry = toProjectDocumentationEntry(snapshot.id, snapshot.data());
+  if (entry.ownerId !== input.ownerId) throw new Error("You do not have access to this project documentation entry.");
+  await updateDoc(documentationRef, { status: input.status, updatedAt: serverTimestamp() });
 }
