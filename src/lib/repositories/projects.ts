@@ -25,6 +25,7 @@ import type {
   ProjectSectionKey,
   ProjectSectionStatus,
   ProjectStatus,
+  ProjectPlanning,
 } from "@/domain/project/types";
 
 const PROJECTS_COLLECTION = "projects";
