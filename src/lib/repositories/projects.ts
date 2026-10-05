@@ -24,6 +24,8 @@ import {
   isValidProjectRequirement,
   isProjectMilestoneStatus,
   isValidProjectMilestone,
+  isProjectDesignDecisionStatus,
+  isValidProjectDesignDecision,
 } from "@/domain/project/validation";
 import type {
   Project,
@@ -36,6 +38,8 @@ import type {
   ProjectRequirementStatus,
   ProjectMilestone,
   ProjectMilestoneStatus,
+  ProjectDesignDecision,
+  ProjectDesignDecisionStatus,
 } from "@/domain/project/types";
 
 const PROJECTS_COLLECTION = "projects";
@@ -384,4 +388,75 @@ export async function updateProjectMilestoneStatus(input: {
   const milestone = toProjectMilestone(snapshot.id, snapshot.data());
   if (milestone.ownerId !== input.ownerId) throw new Error("You do not have access to this milestone.");
   await updateDoc(milestoneRef, { status: input.status, updatedAt: serverTimestamp() });
+}
+
+
+const PROJECT_DESIGN_SUBCOLLECTION = "designDecisions";
+
+function toProjectDesignDecision(id: string, data: Record<string, unknown>): ProjectDesignDecision {
+  return {
+    id,
+    projectId: typeof data.projectId === "string" ? data.projectId : "",
+    ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
+    title: typeof data.title === "string" ? data.title : "",
+    decision: typeof data.decision === "string" ? data.decision : "",
+    rationale: typeof data.rationale === "string" ? data.rationale : "",
+    status: isProjectDesignDecisionStatus(data.status) ? data.status : "proposed",
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+}
+
+export async function listProjectDesignDecisions(projectId: string, ownerId: string): Promise<ProjectDesignDecision[]> {
+  const projectRef = await assertActiveProjectOwner(projectId, ownerId);
+  const snapshot = await getDocs(collection(projectRef, PROJECT_DESIGN_SUBCOLLECTION));
+  return snapshot.docs.map((item) => toProjectDesignDecision(item.id, item.data()));
+}
+
+export async function createProjectDesignDecision(input: {
+  projectId: string;
+  ownerId: string;
+  title: string;
+  decision: string;
+  rationale: string;
+}): Promise<string> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const decisionRef = doc(collection(projectRef, PROJECT_DESIGN_SUBCOLLECTION));
+  const decision: ProjectDesignDecision = {
+    id: decisionRef.id,
+    projectId: input.projectId,
+    ownerId: input.ownerId,
+    title: input.title.trim(),
+    decision: input.decision.trim(),
+    rationale: input.rationale.trim(),
+    status: "proposed",
+  };
+  if (!isValidProjectDesignDecision(decision)) throw new Error("Invalid project design decision.");
+  await setDoc(decisionRef, {
+    projectId: decision.projectId,
+    ownerId: decision.ownerId,
+    title: decision.title,
+    decision: decision.decision,
+    rationale: decision.rationale,
+    status: decision.status,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return decisionRef.id;
+}
+
+export async function updateProjectDesignDecisionStatus(input: {
+  projectId: string;
+  decisionId: string;
+  ownerId: string;
+  status: ProjectDesignDecisionStatus;
+}): Promise<void> {
+  if (!isProjectDesignDecisionStatus(input.status)) throw new Error("Invalid design decision status.");
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const decisionRef = doc(projectRef, PROJECT_DESIGN_SUBCOLLECTION, input.decisionId);
+  const snapshot = await getDoc(decisionRef);
+  if (!snapshot.exists()) throw new Error("Design decision not found.");
+  const decision = toProjectDesignDecision(snapshot.id, snapshot.data());
+  if (decision.ownerId !== input.ownerId) throw new Error("You do not have access to this design decision.");
+  await updateDoc(decisionRef, { status: input.status, updatedAt: serverTimestamp() });
 }
