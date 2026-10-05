@@ -167,7 +167,7 @@ service cloud.firestore {
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.method in ["GET", "POST", "PUT", "PATCH", "DELETE"]
         && request.resource.data.path is string
-        && request.resource.data.path.size() > 1
+        && request.resource.data.path.matches("^/.*")
         && request.resource.data.path.size() <= 300
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
