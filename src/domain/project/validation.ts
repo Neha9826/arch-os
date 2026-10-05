@@ -135,3 +135,20 @@ export function isValidProjectMilestone(milestone: import("./types").ProjectMile
     (milestone.targetDate === undefined || (typeof milestone.targetDate === "string" && /^\\d{4}-\\d{2}-\\d{2}$/.test(milestone.targetDate)))
   );
 }
+
+
+export function isProjectDesignDecisionStatus(value: unknown): value is import("./types").ProjectDesignDecisionStatus {
+  return value === "proposed" || value === "accepted" || value === "superseded";
+}
+
+export function isValidProjectDesignDecision(decision: import("./types").ProjectDesignDecision): boolean {
+  return (
+    typeof decision.id === "string" && decision.id.length > 0 &&
+    typeof decision.projectId === "string" && decision.projectId.length > 0 &&
+    typeof decision.ownerId === "string" && decision.ownerId.length > 0 &&
+    typeof decision.title === "string" && decision.title.trim().length > 0 && decision.title.trim().length <= 200 &&
+    typeof decision.decision === "string" && decision.decision.trim().length > 0 && decision.decision.length <= 5000 &&
+    typeof decision.rationale === "string" && decision.rationale.length <= 5000 &&
+    isProjectDesignDecisionStatus(decision.status)
+  );
+}
