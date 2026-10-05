@@ -312,26 +312,3 @@ export function isValidProjectExecutionTask(
     (task.dueDate === undefined || (typeof task.dueDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate)))
   );
 }
-
-export function isProjectExecutionTaskPriority(value: unknown): value is import("./types").ProjectExecutionTaskPriority {
-  return value === "low" || value === "medium" || value === "high" || value === "critical";
-}
-
-export function isProjectExecutionTaskStatus(value: unknown): value is import("./types").ProjectExecutionTaskStatus {
-  return value === "todo" || value === "in-progress" || value === "blocked" || value === "done";
-}
-
-export function isValidProjectExecutionTask(task: import("./types").ProjectExecutionTask): boolean {
-  return (
-    typeof task.id === "string" && task.id.length > 0 &&
-    typeof task.projectId === "string" && task.projectId.length > 0 &&
-    typeof task.ownerId === "string" && task.ownerId.length > 0 &&
-    typeof task.title === "string" && task.title.trim().length > 0 && task.title.length <= 200 &&
-    (task.description === undefined || (typeof task.description === "string" && task.description.length <= 2000)) &&
-    isProjectExecutionTaskPriority(task.priority) &&
-    isProjectExecutionTaskStatus(task.status) &&
-    (task.section === undefined || isProjectSectionKey(task.section)) &&
-    (task.sourceId === undefined || (typeof task.sourceId === "string" && task.sourceId.length <= 160)) &&
-    (task.dueDate === undefined || (typeof task.dueDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate)))
-  );
-}
