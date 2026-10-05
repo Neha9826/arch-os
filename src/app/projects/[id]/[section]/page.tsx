@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { createProjectApiContract, createProjectDatabaseEntity, createProjectDesignDecision, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { createProjectApiContract, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
-import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
+import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
 
 const META: Record<ProjectSectionKey, { label: string; description: string }> = {
@@ -57,6 +57,9 @@ export default function ProjectSectionPage() {
   const [databaseEntities, setDatabaseEntities] = useState<ProjectDatabaseEntity[]>([]);
   const [newDatabaseEntity, setNewDatabaseEntity] = useState({ name: "", purpose: "" });
   const [savingDatabaseEntity, setSavingDatabaseEntity] = useState(false);
+  const [infrastructureResources, setInfrastructureResources] = useState<ProjectInfrastructureResource[]>([]);
+  const [newInfrastructureResource, setNewInfrastructureResource] = useState({ name: "", provider: "", environment: "development", purpose: "" });
+  const [savingInfrastructureResource, setSavingInfrastructureResource] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -78,6 +81,10 @@ export default function ProjectSectionPage() {
         if (!cancelled) {
           setProject(current);
           setArchitectures(items);
+        }
+        if (section === "infrastructure") {
+          const resourceItems = await listProjectInfrastructureResources(projectId, user.uid);
+          if (!cancelled) setInfrastructureResources(resourceItems);
         }
         if (section === "database") {
           const entityItems = await listProjectDatabaseEntities(projectId, user.uid);
@@ -200,7 +207,61 @@ export default function ProjectSectionPage() {
               </div>
             </section>
 
-            {section === "database" ? (
+            {section === "infrastructure" ? (
+              <section className="mt-6 space-y-6">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+                  <h2 className="font-semibold">Add infrastructure resource</h2>
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <input value={newInfrastructureResource.name} onChange={(e) => setNewInfrastructureResource((v) => ({ ...v, name: e.target.value }))} maxLength={160} placeholder="Resource name" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <input value={newInfrastructureResource.provider} onChange={(e) => setNewInfrastructureResource((v) => ({ ...v, provider: e.target.value }))} maxLength={100} placeholder="Provider (AWS, GCP, Azure...)" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <select value={newInfrastructureResource.environment} onChange={(e) => setNewInfrastructureResource((v) => ({ ...v, environment: e.target.value }))} className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm">
+                      <option value="development">Development</option><option value="staging">Staging</option><option value="production">Production</option><option value="shared">Shared</option>
+                    </select>
+                    <textarea value={newInfrastructureResource.purpose} onChange={(e) => setNewInfrastructureResource((v) => ({ ...v, purpose: e.target.value }))} maxLength={2000} rows={3} placeholder="Purpose / operational role." className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <div className="flex justify-end md:col-span-2">
+                      <button disabled={savingInfrastructureResource || !newInfrastructureResource.name.trim() || !newInfrastructureResource.provider.trim()} onClick={async () => {
+                        if (!user || !project) return;
+                        setSavingInfrastructureResource(true); setError(null);
+                        try {
+                          await createProjectInfrastructureResource({ projectId: project.id, ownerId: user.uid, ...newInfrastructureResource });
+                          setInfrastructureResources(await listProjectInfrastructureResources(project.id, user.uid));
+                          setNewInfrastructureResource({ name: "", provider: "", environment: "development", purpose: "" });
+                        } catch (err) { setError(err instanceof Error ? err.message : "Infrastructure resource could not be created."); }
+                        finally { setSavingInfrastructureResource(false); }
+                      }} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50">{savingInfrastructureResource ? "Adding..." : "Add resource"}</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {infrastructureResources.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No infrastructure resources defined yet.</div>
+                  ) : infrastructureResources.map((resource) => (
+                    <div key={resource.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-semibold">{resource.name}</h3>
+                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500">{resource.environment}</span>
+                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] text-slate-400">{resource.provider}</span>
+                          </div>
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{resource.purpose || "No purpose documented."}</p>
+                        </div>
+                        <select value={resource.status} onChange={async (e) => {
+                          if (!user || !project) return;
+                          const status = e.target.value as ProjectInfrastructureResourceStatus;
+                          try {
+                            await updateProjectInfrastructureResourceStatus({ projectId: project.id, resourceId: resource.id, ownerId: user.uid, status });
+                            setInfrastructureResources((items) => items.map((item) => item.id === resource.id ? { ...item, status } : item));
+                          } catch (err) { setError(err instanceof Error ? err.message : "Infrastructure resource status could not be updated."); }
+                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                          <option value="planned">Planned</option><option value="active">Active</option><option value="retired">Retired</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : section === "database" ? (
               <section className="mt-6 space-y-6">
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
                   <h2 className="font-semibold">Add database entity</h2>
