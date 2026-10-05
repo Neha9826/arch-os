@@ -17,7 +17,8 @@ import {
   isProjectSectionKey,
   isValidProjectDescription,
   isValidProjectName,
-  isProjectSectionStatus,\n  isValidProjectPlanning,
+  isProjectSectionStatus,
+  isValidProjectPlanning,
 } from "@/domain/project/validation";
 import type {
   Project,
@@ -39,7 +40,8 @@ function toProject(id: string, data: Record<string, unknown>): Project {
     description:
       typeof data.description === "string" ? data.description : undefined,
     status: data.status === "archived" ? "archived" : "active",
-    planning: data.planning as Project["planning"],\n    sections: data.sections as Project["sections"],
+    planning: data.planning as Project["planning"],
+    sections: data.sections as Project["sections"],
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };
@@ -104,7 +106,8 @@ export async function createProject(input: {
     ownerId: project.ownerId,
     createdBy: project.createdBy,
     name: project.name,
-    ...(project.description ? { description: project.description } : {}),\n    planning: { objective: "", scope: "", constraints: "", successCriteria: "" },
+    ...(project.description ? { description: project.description } : {}),
+    planning: { objective: "", scope: "", constraints: "", successCriteria: "" },
     status: project.status,
     sections: project.sections,
     createdAt: serverTimestamp(),
@@ -180,7 +183,8 @@ export async function updateProjectSectionStatus(input: {
     });
   });
 }
-\nexport async function updateProjectPlanning(input: {
+
+export async function updateProjectPlanning(input: {
   projectId: string;
   ownerId: string;
   planning: ProjectPlanning;
