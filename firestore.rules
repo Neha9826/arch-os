@@ -300,7 +300,7 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner()
-        && resource.data.ownerId == request.auth.uid;
+        && resource.data.ownerId == request.auth.uid
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
     }
 
@@ -341,7 +341,7 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner()
-        && resource.data.ownerId == request.auth.uid;
+        && resource.data.ownerId == request.auth.uid
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
     }
 
@@ -387,7 +387,7 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner()
-        && resource.data.ownerId == request.auth.uid;
+        && resource.data.ownerId == request.auth.uid
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
     }
 
@@ -428,7 +428,7 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner()
-        && resource.data.ownerId == request.auth.uid;
+        && resource.data.ownerId == request.auth.uid
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
     }
 
@@ -469,7 +469,7 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner()
-        && resource.data.ownerId == request.auth.uid;
+        && resource.data.ownerId == request.auth.uid
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
     }
 
