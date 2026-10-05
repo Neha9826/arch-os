@@ -83,6 +83,21 @@ export async function listArchitecturesForOwner(userId: string): Promise<Archite
   );
 }
 
+export async function listArchitecturesForProject(
+  projectId: string,
+  ownerId: string,
+): Promise<Architecture[]> {
+  const architecturesQuery = query(
+    collection(db, ARCHITECTURES_COLLECTION),
+    where("ownerId", "==", ownerId),
+  );
+  const snapshot = await getDocs(architecturesQuery);
+
+  return snapshot.docs
+    .map((architecture) => toArchitecture(architecture.id, architecture.data()))
+    .filter((architecture) => architecture.projectId === projectId);
+}
+
 export async function getArchitecture(architectureId: string): Promise<Architecture | null> {
   const architectureSnapshot = await getDoc(
     doc(db, ARCHITECTURES_COLLECTION, architectureId),
