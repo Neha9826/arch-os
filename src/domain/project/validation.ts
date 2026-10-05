@@ -6,7 +6,8 @@ import {
 } from "./types";
 
 const PROJECT_NAME_MAX_LENGTH = 120;
-const PROJECT_DESCRIPTION_MAX_LENGTH = 1000;\nconst PROJECT_PLANNING_FIELD_MAX_LENGTH = 5000;
+const PROJECT_DESCRIPTION_MAX_LENGTH = 1000;
+const PROJECT_PLANNING_FIELD_MAX_LENGTH = 5000;
 
 export function isProjectSectionKey(value: unknown): value is ProjectSectionKey {
   return (
