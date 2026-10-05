@@ -209,7 +209,7 @@ export default function ProjectExecutionPage() {
                 <div className="flex items-center gap-2"><select value={task.status} onChange={(e) => void changeStatus(task, e.target.value as ProjectExecutionTaskStatus)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">{Object.entries(STATUS_META).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><button onClick={() => startEditing(task)} className="rounded-lg border border-slate-800 p-2 text-slate-500 hover:border-blue-900 hover:text-blue-400" title="Edit task"><Pencil size={15} /></button><button onClick={() => void removeTask(task)} className="rounded-lg border border-slate-800 p-2 text-slate-500 hover:border-red-900 hover:text-red-400" title="Delete task"><Trash2 size={15} /></button></div>
               </div>
             </article>
-          ))}</div>
+          ))}</div>}
         </section>
       </div>
 
