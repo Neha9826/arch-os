@@ -6,6 +6,8 @@ import {
   isValidProject,
   isValidProjectDescription,
   isValidProjectName,
+  isValidProjectMilestone,
+  isValidProjectApiContract,
 } from "@/domain/project/validation";
 import type { Project } from "@/domain/project/types";
 
@@ -48,6 +50,33 @@ describe("Project domain validation", () => {
     expect(isProjectSectionKey("architecture")).toBe(true);
     expect(isProjectSectionKey("database")).toBe(true);
     expect(isProjectSectionKey("unknown")).toBe(false);
+  });
+
+  test("validates roadmap target dates as YYYY-MM-DD", () => {
+    const base = {
+      id: "milestone-1",
+      projectId: "project-1",
+      ownerId: "user-1",
+      title: "Launch",
+      status: "planned" as const,
+    };
+
+    expect(isValidProjectMilestone({ ...base, targetDate: "2026-10-05" })).toBe(true);
+    expect(isValidProjectMilestone({ ...base, targetDate: "2026/10/05" })).toBe(false);
+  });
+
+  test("requires API contract paths to start with /", () => {
+    const base = {
+      id: "api-1",
+      projectId: "project-1",
+      ownerId: "user-1",
+      method: "GET" as const,
+      title: "Get users",
+      status: "draft" as const,
+    };
+
+    expect(isValidProjectApiContract({ ...base, path: "/users" })).toBe(true);
+    expect(isValidProjectApiContract({ ...base, path: "users" })).toBe(false);
   });
 
   test("rejects projects without tenant ownership", () => {
