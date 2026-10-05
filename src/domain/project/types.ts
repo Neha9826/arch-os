@@ -166,3 +166,28 @@ export type ProjectTestCase = {
   createdAt?: unknown;
   updatedAt?: unknown;
 };
+
+
+export type ProjectDocumentationType =
+  | "readme"
+  | "api"
+  | "architecture"
+  | "runbook"
+  | "decision"
+  | "guide"
+  | "other";
+
+export type ProjectDocumentationStatus = "planned" | "draft" | "published" | "deprecated";
+
+export type ProjectDocumentationEntry = {
+  id: string;
+  projectId: string;
+  ownerId: string;
+  title: string;
+  type: ProjectDocumentationType;
+  path: string;
+  summary: string;
+  status: ProjectDocumentationStatus;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
