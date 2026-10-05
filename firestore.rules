@@ -72,7 +72,18 @@ service cloud.firestore {
         && request.resource.data.sections.infrastructure in ["not-started", "in-progress", "complete"]
         && request.resource.data.sections.code in ["not-started", "in-progress", "complete"]
         && request.resource.data.sections.testing in ["not-started", "in-progress", "complete"]
-        && request.resource.data.sections.documentation in ["not-started", "in-progress", "complete"]\n        && request.resource.data.planning is map\n        && request.resource.data.planning.keys().hasAll(["objective", "scope", "constraints", "successCriteria"])\n        && request.resource.data.planning.objective is string\n        && request.resource.data.planning.objective.size() <= 5000\n        && request.resource.data.planning.scope is string\n        && request.resource.data.planning.scope.size() <= 5000\n        && request.resource.data.planning.constraints is string\n        && request.resource.data.planning.constraints.size() <= 5000\n        && request.resource.data.planning.successCriteria is string\n        && request.resource.data.planning.successCriteria.size() <= 5000\n;
+        && request.resource.data.sections.documentation in ["not-started", "in-progress", "complete"]
+        && request.resource.data.planning is map
+        && request.resource.data.planning.keys().hasAll(["objective", "scope", "constraints", "successCriteria"])
+        && request.resource.data.planning.objective is string
+        && request.resource.data.planning.objective.size() <= 5000
+        && request.resource.data.planning.scope is string
+        && request.resource.data.planning.scope.size() <= 5000
+        && request.resource.data.planning.constraints is string
+        && request.resource.data.planning.constraints.size() <= 5000
+        && request.resource.data.planning.successCriteria is string
+        && request.resource.data.planning.successCriteria.size() <= 5000
+;
 
       allow update: if isProjectOwner()
         && request.resource.data.workspaceId == resource.data.workspaceId
