@@ -235,3 +235,27 @@ export function isValidProjectCodeArtifact(
     isProjectCodeArtifactStatus(artifact.status)
   );
 }
+
+
+export function isProjectTestType(value: unknown): value is import("./types").ProjectTestType {
+  return value === "unit" || value === "integration" || value === "e2e" || value === "security" || value === "performance" || value === "other";
+}
+
+export function isProjectTestStatus(value: unknown): value is import("./types").ProjectTestStatus {
+  return value === "planned" || value === "passing" || value === "failing" || value === "skipped";
+}
+
+export function isValidProjectTestCase(
+  testCase: import("./types").ProjectTestCase,
+): boolean {
+  return (
+    typeof testCase.id === "string" && testCase.id.length > 0 &&
+    typeof testCase.projectId === "string" && testCase.projectId.length > 0 &&
+    typeof testCase.ownerId === "string" && testCase.ownerId.length > 0 &&
+    typeof testCase.name === "string" && testCase.name.trim().length > 0 && testCase.name.length <= 200 &&
+    isProjectTestType(testCase.type) &&
+    typeof testCase.path === "string" && testCase.path.trim().length > 0 && testCase.path.length <= 500 &&
+    typeof testCase.purpose === "string" && testCase.purpose.length <= 2000 &&
+    isProjectTestStatus(testCase.status)
+  );
+}
