@@ -118,6 +118,39 @@ service cloud.firestore {
       allow delete: if isProjectOwner();
     }
 
+    match /projects/{projectId}/databaseEntities/{entityId} {
+      function isParentProjectOwner() {
+        return isSignedIn()
+          && exists(/databases/$(database)/documents/projects/$(projectId))
+          && get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid;
+      }
+
+      allow get, list: if isParentProjectOwner();
+
+      allow create: if isParentProjectOwner()
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active"
+        && request.resource.data.projectId == projectId
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.matches("^[A-Za-z_][A-Za-z0-9_]*$")
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.purpose is string
+        && request.resource.data.purpose.size() <= 2000
+        && request.resource.data.status == "draft";
+
+      allow update: if isParentProjectOwner()
+        && resource.data.projectId == projectId
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.projectId == resource.data.projectId
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.name == resource.data.name
+        && request.resource.data.purpose == resource.data.purpose
+        && request.resource.data.status in ["draft", "active", "deprecated"]
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
+
+      allow delete: if isParentProjectOwner() && resource.data.ownerId == request.auth.uid;
+    }
+
     match /projects/{projectId}/apiContracts/{contractId} {
       function isParentProjectOwner() {
         return isSignedIn()
