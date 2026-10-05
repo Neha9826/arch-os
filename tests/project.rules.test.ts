@@ -70,6 +70,19 @@ async function seedWorkspace(workspaceId: string, ownerId: string) {
   });
 }
 
+const defaultSections = {
+  planning: "not-started",
+  requirements: "not-started",
+  roadmap: "not-started",
+  design: "not-started",
+  architecture: "not-started",
+  api: "not-started",
+  database: "not-started",
+  infrastructure: "not-started",
+  code: "not-started",
+  testing: "not-started",
+  documentation: "not-started",
+};
 const projectData = {
   workspaceId: workspaceA,
   ownerId: userA.uid,
@@ -77,6 +90,7 @@ const projectData = {
   name: "Commerce Platform",
   description: "Engineering project",
   status: "active",
+  sections: defaultSections,
 };
 
 describe("Project security rules", () => {
@@ -134,6 +148,63 @@ describe("Project security rules", () => {
     await assertFails(
       updateDoc(doc(db(userA), "projects", projectA), {
         ownerId: userB.uid,
+      }),
+    );
+  });
+
+  test("owner can update a valid project section status", async () => {
+    await seedWorkspace(workspaceA, userA.uid);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "projects", projectA),
+        projectData,
+      );
+    });
+
+    await assertSucceeds(
+      updateDoc(doc(db(userA), "projects", projectA), {
+        sections: {
+          ...defaultSections,
+          architecture: "in-progress",
+        },
+      }),
+    );
+  });
+
+  test("owner cannot write an invalid project section map", async () => {
+    await seedWorkspace(workspaceA, userA.uid);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "projects", projectA),
+        projectData,
+      );
+    });
+
+    await assertFails(
+      updateDoc(doc(db(userA), "projects", projectA), {
+        sections: {
+          ...defaultSections,
+          architecture: "blocked",
+        },
+      }),
+    );
+  });
+
+  test("owner cannot change sections on an archived project", async () => {
+    await seedWorkspace(workspaceA, userA.uid);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "projects", projectA),
+        { ...projectData, status: "archived" },
+      );
+    });
+
+    await assertFails(
+      updateDoc(doc(db(userA), "projects", projectA), {
+        sections: {
+          ...defaultSections,
+          architecture: "complete",
+        },
       }),
     );
   });
