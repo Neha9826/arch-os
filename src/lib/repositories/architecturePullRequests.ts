@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -58,13 +57,13 @@ export async function createArchitecturePullRequest(input: {
     "branches",
     input.sourceBranchId,
   );
-  const prsRef = collection(
+  const prRef = doc(
     db,
     "architectures",
     input.architectureId,
     PR_SUBCOLLECTION,
+    input.sourceBranchId,
   );
-  const prRef = doc(prsRef);
 
   await runTransaction(db, async (transaction) => {
     const architectureSnapshot = await transaction.get(architectureRef);
@@ -89,6 +88,22 @@ export async function createArchitecturePullRequest(input: {
       throw new Error("Only an active branch can open a pull request.");
     }
 
+    const existing = await transaction.get(prRef);
+    if (existing.exists()) {
+      const current = toPullRequest(existing.id, existing.data());
+      if (!canOpenPullRequestFromBranch(branch.status, current.status)) {
+        throw new Error("This branch already has an open or merged pull request.");
+      }
+
+      transaction.update(prRef, {
+        title,
+        description: input.description?.trim() || "",
+        status: "open",
+        updatedAt: serverTimestamp(),
+      });
+      return;
+    }
+
     transaction.set(prRef, {
       architectureId: input.architectureId,
       workspaceId: input.workspaceId,
@@ -101,6 +116,11 @@ export async function createArchitecturePullRequest(input: {
       description: input.description?.trim() || "",
       status: "open",
       createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    transaction.update(branchRef, {
+      pullRequestId: prRef.id,
       updatedAt: serverTimestamp(),
     });
   });
