@@ -26,6 +26,9 @@ import {
   isValidProjectMilestone,
   isProjectDesignDecisionStatus,
   isValidProjectDesignDecision,
+  isProjectApiMethod,
+  isProjectApiStatus,
+  isValidProjectApiContract,
 } from "@/domain/project/validation";
 import type {
   Project,
@@ -40,6 +43,9 @@ import type {
   ProjectMilestoneStatus,
   ProjectDesignDecision,
   ProjectDesignDecisionStatus,
+  ProjectApiContract,
+  ProjectApiMethod,
+  ProjectApiStatus,
 } from "@/domain/project/types";
 
 const PROJECTS_COLLECTION = "projects";
@@ -459,4 +465,79 @@ export async function updateProjectDesignDecisionStatus(input: {
   const decision = toProjectDesignDecision(snapshot.id, snapshot.data());
   if (decision.ownerId !== input.ownerId) throw new Error("You do not have access to this design decision.");
   await updateDoc(decisionRef, { status: input.status, updatedAt: serverTimestamp() });
+}
+
+
+const PROJECT_API_SUBCOLLECTION = "apiContracts";
+
+function toProjectApiContract(id: string, data: Record<string, unknown>): ProjectApiContract {
+  return {
+    id,
+    projectId: typeof data.projectId === "string" ? data.projectId : "",
+    ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
+    method: isProjectApiMethod(data.method) ? data.method : "GET",
+    path: typeof data.path === "string" ? data.path : "",
+    title: typeof data.title === "string" ? data.title : "",
+    description: typeof data.description === "string" ? data.description : undefined,
+    status: isProjectApiStatus(data.status) ? data.status : "draft",
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+}
+
+export async function listProjectApiContracts(projectId: string, ownerId: string): Promise<ProjectApiContract[]> {
+  const projectRef = await assertActiveProjectOwner(projectId, ownerId);
+  const snapshot = await getDocs(collection(projectRef, PROJECT_API_SUBCOLLECTION));
+  return snapshot.docs.map((item) => toProjectApiContract(item.id, item.data()));
+}
+
+export async function createProjectApiContract(input: {
+  projectId: string;
+  ownerId: string;
+  method: ProjectApiMethod;
+  path: string;
+  title: string;
+  description?: string;
+}): Promise<string> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const contractRef = doc(collection(projectRef, PROJECT_API_SUBCOLLECTION));
+  const contract: ProjectApiContract = {
+    id: contractRef.id,
+    projectId: input.projectId,
+    ownerId: input.ownerId,
+    method: input.method,
+    path: input.path.trim(),
+    title: input.title.trim(),
+    description: input.description?.trim() || undefined,
+    status: "draft",
+  };
+  if (!isValidProjectApiContract(contract)) throw new Error("Invalid project API contract.");
+  await setDoc(contractRef, {
+    projectId: contract.projectId,
+    ownerId: contract.ownerId,
+    method: contract.method,
+    path: contract.path,
+    title: contract.title,
+    ...(contract.description ? { description: contract.description } : {}),
+    status: contract.status,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return contractRef.id;
+}
+
+export async function updateProjectApiContractStatus(input: {
+  projectId: string;
+  contractId: string;
+  ownerId: string;
+  status: ProjectApiStatus;
+}): Promise<void> {
+  if (!isProjectApiStatus(input.status)) throw new Error("Invalid API contract status.");
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const contractRef = doc(projectRef, PROJECT_API_SUBCOLLECTION, input.contractId);
+  const snapshot = await getDoc(contractRef);
+  if (!snapshot.exists()) throw new Error("API contract not found.");
+  const contract = toProjectApiContract(snapshot.id, snapshot.data());
+  if (contract.ownerId !== input.ownerId) throw new Error("You do not have access to this API contract.");
+  await updateDoc(contractRef, { status: input.status, updatedAt: serverTimestamp() });
 }
