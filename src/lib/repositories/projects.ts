@@ -36,6 +36,9 @@ import {
   isValidProjectInfrastructureResource,
   isProjectCodeArtifactStatus,
   isValidProjectCodeArtifact,
+  isProjectTestType,
+  isProjectTestStatus,
+  isValidProjectTestCase,
 } from "@/domain/project/validation";
 import type {
   Project,
@@ -60,6 +63,9 @@ import type {
   ProjectInfrastructureEnvironment,
   ProjectCodeArtifact,
   ProjectCodeArtifactStatus,
+  ProjectTestCase,
+  ProjectTestType,
+  ProjectTestStatus,
 } from "@/domain/project/types";
 
 const PROJECTS_COLLECTION = "projects";
@@ -830,6 +836,102 @@ export async function updateProjectCodeArtifactStatus(input: {
   }
 
   await updateDoc(artifactRef, {
+    status: input.status,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+
+const PROJECT_TESTS_SUBCOLLECTION = "testCases";
+
+function toProjectTestCase(
+  id: string,
+  data: Record<string, unknown>,
+): ProjectTestCase {
+  return {
+    id,
+    projectId: typeof data.projectId === "string" ? data.projectId : "",
+    ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
+    name: typeof data.name === "string" ? data.name : "",
+    type: isProjectTestType(data.type) ? data.type : "other",
+    path: typeof data.path === "string" ? data.path : "",
+    purpose: typeof data.purpose === "string" ? data.purpose : "",
+    status: isProjectTestStatus(data.status) ? data.status : "planned",
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+}
+
+export async function listProjectTestCases(
+  projectId: string,
+  ownerId: string,
+): Promise<ProjectTestCase[]> {
+  const projectRef = await assertActiveProjectOwner(projectId, ownerId);
+  const snapshot = await getDocs(collection(projectRef, PROJECT_TESTS_SUBCOLLECTION));
+  return snapshot.docs.map((item) => toProjectTestCase(item.id, item.data()));
+}
+
+export async function createProjectTestCase(input: {
+  projectId: string;
+  ownerId: string;
+  name: string;
+  type: ProjectTestType;
+  path: string;
+  purpose: string;
+}): Promise<string> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const testRef = doc(collection(projectRef, PROJECT_TESTS_SUBCOLLECTION));
+  const testCase: ProjectTestCase = {
+    id: testRef.id,
+    projectId: input.projectId,
+    ownerId: input.ownerId,
+    name: input.name.trim(),
+    type: input.type,
+    path: input.path.trim(),
+    purpose: input.purpose.trim(),
+    status: "planned",
+  };
+
+  if (!isValidProjectTestCase(testCase)) {
+    throw new Error("Invalid project test case.");
+  }
+
+  await setDoc(testRef, {
+    projectId: testCase.projectId,
+    ownerId: testCase.ownerId,
+    name: testCase.name,
+    type: testCase.type,
+    path: testCase.path,
+    purpose: testCase.purpose,
+    status: testCase.status,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return testRef.id;
+}
+
+export async function updateProjectTestCaseStatus(input: {
+  projectId: string;
+  testCaseId: string;
+  ownerId: string;
+  status: ProjectTestStatus;
+}): Promise<void> {
+  if (!isProjectTestStatus(input.status)) {
+    throw new Error("Invalid project test status.");
+  }
+
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const testRef = doc(projectRef, PROJECT_TESTS_SUBCOLLECTION, input.testCaseId);
+  const snapshot = await getDoc(testRef);
+  if (!snapshot.exists()) throw new Error("Project test case not found.");
+
+  const testCase = toProjectTestCase(snapshot.id, snapshot.data());
+  if (testCase.ownerId !== input.ownerId) {
+    throw new Error("You do not have access to this project test case.");
+  }
+
+  await updateDoc(testRef, {
     status: input.status,
     updatedAt: serverTimestamp(),
   });
