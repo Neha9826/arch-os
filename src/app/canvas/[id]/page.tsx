@@ -1041,6 +1041,42 @@ function StudioEditor() {
     }
   };
 
+  const handleUpdatePullRequestStatus = async (
+    pullRequest: ArchitecturePullRequest,
+    status: "open" | "closed",
+  ) => {
+    if (!user || isNewProject) return;
+
+    const branch = branches.find((item) => item.id === pullRequest.sourceBranchId);
+    if (status === "open" && branch?.status !== "active") {
+      setSnapshotError("Only an active branch can reopen a pull request.");
+      return;
+    }
+
+    try {
+      await updateArchitecturePullRequestStatus({
+        architectureId: projectId,
+        pullRequestId: pullRequest.id,
+        status,
+      });
+      await loadPullRequests();
+      setSaveNotice(
+        status === "open"
+          ? `Pull request reopened for ${pullRequest.sourceBranchName}.`
+          : `Pull request closed: ${pullRequest.title}`,
+      );
+    } catch (error) {
+      console.error("Error updating pull request:", error);
+      setSnapshotError(
+        getFirestoreErrorCode(error) === "permission-denied"
+          ? "Permission denied. The pull request status could not be changed."
+          : error instanceof Error
+            ? error.message
+            : "Could not update the pull request.",
+      );
+    }
+  };
+
   const handleCreateBranch = async () => {
     if (!user || isNewProject || !branchSourceSnapshot || branchCreating) return;
 
@@ -2269,15 +2305,35 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                             </p>
                             {pullRequest.description && <p className="mt-1 text-xs text-slate-400">{pullRequest.description}</p>}
                           </div>
-                          {pullRequest.status === "open" && branch?.status === "active" && (
-                            <button
-                              onClick={() => void handleOpenBranchReview(branch)}
-                              disabled={branchReviewLoading || branchMerging || hasUnsavedChanges}
-                              className="shrink-0 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
-                            >
-                              Review
-                            </button>
-                          )}
+                          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                            {pullRequest.status === "open" && branch?.status === "active" && (
+                              <>
+                                <button
+                                  onClick={() => void handleOpenBranchReview(branch)}
+                                  disabled={branchReviewLoading || branchMerging || hasUnsavedChanges}
+                                  className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+                                >
+                                  Review
+                                </button>
+                                <button
+                                  onClick={() => void handleUpdatePullRequestStatus(pullRequest, "closed")}
+                                  disabled={branchMerging || branchReviewLoading}
+                                  className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+                                >
+                                  Close
+                                </button>
+                              </>
+                            )}
+                            {pullRequest.status === "closed" && branch?.status === "active" && (
+                              <button
+                                onClick={() => void handleUpdatePullRequestStatus(pullRequest, "open")}
+                                disabled={branchMerging || branchReviewLoading}
+                                className="rounded-lg border border-violet-700/60 bg-violet-950/30 px-3 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-900/50 disabled:opacity-50"
+                              >
+                                Reopen
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
