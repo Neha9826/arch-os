@@ -2767,10 +2767,27 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
               </h3>
               <button onClick={() => setShowLintModal(false)} className="text-slate-500 hover:text-slate-300 transition-colors">✕</button>
             </div>
-            <div className="flex gap-3 mb-5 text-sm">
-              <span className="rounded-lg bg-red-950/50 text-red-200 px-3 py-2">{lintResult.summary.errors} errors</span>
-              <span className="rounded-lg bg-amber-950/50 text-amber-200 px-3 py-2">{lintResult.summary.warnings} warnings</span>
-              <span className="rounded-lg bg-blue-950/50 text-blue-200 px-3 py-2">{lintResult.summary.info} info</span>
+            <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Health score</p>
+                <p className="mt-1 text-2xl font-semibold text-slate-100">{lintResult.health.score}<span className="text-sm text-slate-500">/100</span></p>
+                <p className="mt-1 text-xs capitalize text-emerald-300">{lintResult.health.status.replace("-", " ")}</p>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Components</p>
+                <p className="mt-1 text-2xl font-semibold text-slate-100">{lintResult.health.metrics.components}</p>
+                <p className="mt-1 text-xs text-slate-500">{lintResult.health.metrics.isolatedComponents} isolated</p>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Relations</p>
+                <p className="mt-1 text-2xl font-semibold text-slate-100">{lintResult.health.metrics.relations}</p>
+                <p className="mt-1 text-xs text-slate-500">max fan-out {lintResult.health.metrics.maxOutgoingRelations}</p>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Findings</p>
+                <p className="mt-1 text-2xl font-semibold text-slate-100">{lintResult.findings.length}</p>
+                <p className="mt-1 text-xs text-slate-500">{lintResult.summary.errors} errors · {lintResult.summary.warnings} warnings</p>
+              </div>
             </div>
             <div className="overflow-y-auto space-y-3 pr-1">
               {lintResult.findings.length === 0 ? (
