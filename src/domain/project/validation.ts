@@ -152,3 +152,25 @@ export function isValidProjectDesignDecision(decision: import("./types").Project
     isProjectDesignDecisionStatus(decision.status)
   );
 }
+
+
+export function isProjectApiMethod(value: unknown): value is import("./types").ProjectApiMethod {
+  return value === "GET" || value === "POST" || value === "PUT" || value === "PATCH" || value === "DELETE";
+}
+
+export function isProjectApiStatus(value: unknown): value is import("./types").ProjectApiStatus {
+  return value === "draft" || value === "active" || value === "deprecated";
+}
+
+export function isValidProjectApiContract(contract: import("./types").ProjectApiContract): boolean {
+  return (
+    typeof contract.id === "string" && contract.id.length > 0 &&
+    typeof contract.projectId === "string" && contract.projectId.length > 0 &&
+    typeof contract.ownerId === "string" && contract.ownerId.length > 0 &&
+    isProjectApiMethod(contract.method) &&
+    typeof contract.path === "string" && /^\\/.test(contract.path) && contract.path.length <= 300 &&
+    typeof contract.title === "string" && contract.title.trim().length > 0 && contract.title.trim().length <= 200 &&
+    (contract.description === undefined || (typeof contract.description === "string" && contract.description.length <= 2000)) &&
+    isProjectApiStatus(contract.status)
+  );
+}
