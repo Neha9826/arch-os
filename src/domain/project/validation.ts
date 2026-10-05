@@ -190,3 +190,27 @@ export function isValidProjectDatabaseEntity(entity: import("./types").ProjectDa
     isProjectDatabaseEntityStatus(entity.status)
   );
 }
+
+
+export function isProjectInfrastructureResourceStatus(value: unknown): value is import("./types").ProjectInfrastructureResourceStatus {
+  return value === "planned" || value === "active" || value === "retired";
+}
+
+export function isProjectInfrastructureEnvironment(value: unknown): value is import("./types").ProjectInfrastructureEnvironment {
+  return value === "development" || value === "staging" || value === "production" || value === "shared";
+}
+
+export function isValidProjectInfrastructureResource(
+  resource: import("./types").ProjectInfrastructureResource,
+): boolean {
+  return (
+    typeof resource.id === "string" && resource.id.length > 0 &&
+    typeof resource.projectId === "string" && resource.projectId.length > 0 &&
+    typeof resource.ownerId === "string" && resource.ownerId.length > 0 &&
+    typeof resource.name === "string" && resource.name.trim().length > 0 && resource.name.length <= 160 &&
+    typeof resource.provider === "string" && resource.provider.trim().length > 0 && resource.provider.length <= 100 &&
+    isProjectInfrastructureEnvironment(resource.environment) &&
+    typeof resource.purpose === "string" && resource.purpose.length <= 2000 &&
+    isProjectInfrastructureResourceStatus(resource.status)
+  );
+}
