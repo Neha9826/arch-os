@@ -6,7 +6,7 @@ import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lu
 import { useAuth } from "@/context/AuthContext";
 import { createProjectApiContract, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
-import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
+import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
 
 const META: Record<ProjectSectionKey, { label: string; description: string }> = {
@@ -58,7 +58,7 @@ export default function ProjectSectionPage() {
   const [newDatabaseEntity, setNewDatabaseEntity] = useState({ name: "", purpose: "" });
   const [savingDatabaseEntity, setSavingDatabaseEntity] = useState(false);
   const [infrastructureResources, setInfrastructureResources] = useState<ProjectInfrastructureResource[]>([]);
-  const [newInfrastructureResource, setNewInfrastructureResource] = useState({ name: "", provider: "", environment: "development", purpose: "" });
+  const [newInfrastructureResource, setNewInfrastructureResource] = useState<{ name: string; provider: string; environment: ProjectInfrastructureEnvironment; purpose: string }>({ name: "", provider: "", environment: "development", purpose: "" });
   const [savingInfrastructureResource, setSavingInfrastructureResource] = useState(false);
 
   useEffect(() => {
