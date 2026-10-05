@@ -31,6 +31,9 @@ import {
   isValidProjectApiContract,
   isProjectDatabaseEntityStatus,
   isValidProjectDatabaseEntity,
+  isProjectInfrastructureResourceStatus,
+  isProjectInfrastructureEnvironment,
+  isValidProjectInfrastructureResource,
 } from "@/domain/project/validation";
 import type {
   Project,
@@ -50,6 +53,9 @@ import type {
   ProjectApiStatus,
   ProjectDatabaseEntity,
   ProjectDatabaseEntityStatus,
+  ProjectInfrastructureResource,
+  ProjectInfrastructureResourceStatus,
+  ProjectInfrastructureEnvironment,
 } from "@/domain/project/types";
 
 const PROJECTS_COLLECTION = "projects";
@@ -611,4 +617,114 @@ export async function updateProjectDatabaseEntityStatus(input: {
   const entity = toProjectDatabaseEntity(snapshot.id, snapshot.data());
   if (entity.ownerId !== input.ownerId) throw new Error("You do not have access to this database entity.");
   await updateDoc(entityRef, { status: input.status, updatedAt: serverTimestamp() });
+}
+
+
+const PROJECT_INFRASTRUCTURE_SUBCOLLECTION = "infrastructureResources";
+
+function toProjectInfrastructureResource(
+  id: string,
+  data: Record<string, unknown>,
+): ProjectInfrastructureResource {
+  return {
+    id,
+    projectId: typeof data.projectId === "string" ? data.projectId : "",
+    ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
+    name: typeof data.name === "string" ? data.name : "",
+    provider: typeof data.provider === "string" ? data.provider : "",
+    environment: isProjectInfrastructureEnvironment(data.environment)
+      ? data.environment
+      : "development",
+    purpose: typeof data.purpose === "string" ? data.purpose : "",
+    status: isProjectInfrastructureResourceStatus(data.status)
+      ? data.status
+      : "planned",
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+}
+
+export async function listProjectInfrastructureResources(
+  projectId: string,
+  ownerId: string,
+): Promise<ProjectInfrastructureResource[]> {
+  const projectRef = await assertActiveProjectOwner(projectId, ownerId);
+  const snapshot = await getDocs(
+    collection(projectRef, PROJECT_INFRASTRUCTURE_SUBCOLLECTION),
+  );
+  return snapshot.docs.map((item) =>
+    toProjectInfrastructureResource(item.id, item.data()),
+  );
+}
+
+export async function createProjectInfrastructureResource(input: {
+  projectId: string;
+  ownerId: string;
+  name: string;
+  provider: string;
+  environment: ProjectInfrastructureEnvironment;
+  purpose: string;
+}): Promise<string> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const resourceRef = doc(
+    collection(projectRef, PROJECT_INFRASTRUCTURE_SUBCOLLECTION),
+  );
+  const resource: ProjectInfrastructureResource = {
+    id: resourceRef.id,
+    projectId: input.projectId,
+    ownerId: input.ownerId,
+    name: input.name.trim(),
+    provider: input.provider.trim(),
+    environment: input.environment,
+    purpose: input.purpose.trim(),
+    status: "planned",
+  };
+
+  if (!isValidProjectInfrastructureResource(resource)) {
+    throw new Error("Invalid project infrastructure resource.");
+  }
+
+  await setDoc(resourceRef, {
+    projectId: resource.projectId,
+    ownerId: resource.ownerId,
+    name: resource.name,
+    provider: resource.provider,
+    environment: resource.environment,
+    purpose: resource.purpose,
+    status: resource.status,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return resourceRef.id;
+}
+
+export async function updateProjectInfrastructureResourceStatus(input: {
+  projectId: string;
+  resourceId: string;
+  ownerId: string;
+  status: ProjectInfrastructureResourceStatus;
+}): Promise<void> {
+  if (!isProjectInfrastructureResourceStatus(input.status)) {
+    throw new Error("Invalid infrastructure resource status.");
+  }
+
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const resourceRef = doc(
+    projectRef,
+    PROJECT_INFRASTRUCTURE_SUBCOLLECTION,
+    input.resourceId,
+  );
+  const snapshot = await getDoc(resourceRef);
+  if (!snapshot.exists()) throw new Error("Infrastructure resource not found.");
+
+  const resource = toProjectInfrastructureResource(snapshot.id, snapshot.data());
+  if (resource.ownerId !== input.ownerId) {
+    throw new Error("You do not have access to this infrastructure resource.");
+  }
+
+  await updateDoc(resourceRef, {
+    status: input.status,
+    updatedAt: serverTimestamp(),
+  });
 }
