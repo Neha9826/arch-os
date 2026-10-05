@@ -41,7 +41,10 @@ export default function ProjectSectionPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [planning, setPlanning] = useState<ProjectPlanning>({ objective: "", scope: "", constraints: "", successCriteria: "" });
-  const [savingPlanning, setSavingPlanning] = useState(false);\n  const [requirements, setRequirements] = useState<ProjectRequirement[]>([]);\n  const [newRequirement, setNewRequirement] = useState({ title: "", description: "", priority: "medium" as ProjectRequirementPriority });\n  const [savingRequirement, setSavingRequirement] = useState(false);
+  const [savingPlanning, setSavingPlanning] = useState(false);
+  const [requirements, setRequirements] = useState<ProjectRequirement[]>([]);
+  const [newRequirement, setNewRequirement] = useState({ title: "", description: "", priority: "medium" as ProjectRequirementPriority });
+  const [savingRequirement, setSavingRequirement] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -62,7 +65,8 @@ export default function ProjectSectionPage() {
           : [];
         if (!cancelled) {
           setProject(current);
-          setArchitectures(items);\n          setRequirements(requirementItems);
+          setArchitectures(items);
+          setRequirements(requirementItems);
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Section could not be loaded.");
