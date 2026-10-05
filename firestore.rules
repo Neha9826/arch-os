@@ -115,7 +115,7 @@ service cloud.firestore {
           || request.resource.data.sections == resource.data.sections
         );
 
-      allow delete: if isProjectOwner();
+      allow delete: if isProjectOwner() && resource.data.status == "active";
     }
 
     match /projects/{projectId}/databaseEntities/{entityId} {
