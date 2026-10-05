@@ -66,7 +66,10 @@ export default function ProjectSectionPage() {
         if (!cancelled) {
           setProject(current);
           setArchitectures(items);
-          setRequirements(requirementItems);
+        }
+        if (section === "requirements") {
+          const requirementItems = await listProjectRequirements(projectId, user.uid);
+          if (!cancelled) setRequirements(requirementItems);
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Section could not be loaded.");
