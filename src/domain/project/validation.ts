@@ -132,7 +132,7 @@ export function isValidProjectMilestone(milestone: import("./types").ProjectMile
     milestone.title.trim().length <= 200 &&
     (milestone.description === undefined || (typeof milestone.description === "string" && milestone.description.length <= 2000)) &&
     isProjectMilestoneStatus(milestone.status) &&
-    (milestone.targetDate === undefined || (typeof milestone.targetDate === "string" && /^\\d{4}-\\d{2}-\\d{2}$/.test(milestone.targetDate)))
+    (milestone.targetDate === undefined || (typeof milestone.targetDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(milestone.targetDate)))
   );
 }
 
@@ -168,7 +168,7 @@ export function isValidProjectApiContract(contract: import("./types").ProjectApi
     typeof contract.projectId === "string" && contract.projectId.length > 0 &&
     typeof contract.ownerId === "string" && contract.ownerId.length > 0 &&
     isProjectApiMethod(contract.method) &&
-    typeof contract.path === "string" && /^\\/.test(contract.path) && contract.path.length <= 300 &&
+    typeof contract.path === "string" && /^\//.test(contract.path) && contract.path.length <= 300 &&
     typeof contract.title === "string" && contract.title.trim().length > 0 && contract.title.trim().length <= 200 &&
     (contract.description === undefined || (typeof contract.description === "string" && contract.description.length <= 2000)) &&
     isProjectApiStatus(contract.status)
