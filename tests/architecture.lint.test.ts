@@ -28,6 +28,8 @@ describe("Architecture lint", () => {
       }),
     );
     expect(result.summary).toEqual({ errors: 1, warnings: 0, info: 0 });
+    expect(result.health.score).toBe(0);
+    expect(result.health.status).toBe("critical");
   });
 
   test("reports disconnected components without treating them as fatal", () => {
@@ -48,6 +50,18 @@ describe("Architecture lint", () => {
     );
     expect(result.summary.errors).toBe(0);
     expect(result.summary.warnings).toBe(1);
+    expect(result.health).toEqual({
+      score: 90,
+      status: "healthy",
+      metrics: {
+        components: 3,
+        relations: 1,
+        connectedComponents: 2,
+        isolatedComponents: 1,
+        maxIncomingRelations: 1,
+        maxOutgoingRelations: 1,
+      },
+    });
   });
 
   test("reports a relation that connects a component to itself", () => {
@@ -101,6 +115,18 @@ describe("Architecture lint", () => {
 
     expect(result.findings).toEqual([]);
     expect(result.summary).toEqual({ errors: 0, warnings: 0, info: 0 });
+    expect(result.health).toEqual({
+      score: 100,
+      status: "healthy",
+      metrics: {
+        components: 2,
+        relations: 1,
+        connectedComponents: 2,
+        isolatedComponents: 0,
+        maxIncomingRelations: 1,
+        maxOutgoingRelations: 1,
+      },
+    });
   });
 
   test("does not treat a self-loop as a connection to another component", () => {
@@ -122,5 +148,32 @@ describe("Architecture lint", () => {
     lintArchitecture(architecture);
 
     expect(architecture).toEqual(connectedArchitecture);
+  });
+
+  test("reports fan-in and fan-out metrics without adding heuristic findings", () => {
+    const result = lintArchitecture({
+      schemaVersion: 1,
+      components: [
+        { id: "client", kind: "client", name: "Web Client" },
+        { id: "api", kind: "service", name: "API Service" },
+        { id: "db", kind: "database", name: "Database" },
+        { id: "queue", kind: "queue", name: "Queue" },
+      ],
+      relations: [
+        { id: "client-api", source: "client", target: "api", kind: "http" },
+        { id: "api-db", source: "api", target: "db", kind: "database" },
+        { id: "api-queue", source: "api", target: "queue", kind: "message" },
+      ],
+    });
+
+    expect(result.findings).toEqual([]);
+    expect(result.health.metrics).toEqual({
+      components: 4,
+      relations: 3,
+      connectedComponents: 4,
+      isolatedComponents: 0,
+      maxIncomingRelations: 1,
+      maxOutgoingRelations: 2,
+    });
   });
 });
