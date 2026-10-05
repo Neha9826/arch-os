@@ -117,3 +117,21 @@ export function isValidProjectRequirement(requirement: import("./types").Project
     isProjectRequirementStatus(requirement.status)
   );
 }
+
+
+export function isProjectMilestoneStatus(value: unknown): value is import("./types").ProjectMilestoneStatus {
+  return value === "planned" || value === "in-progress" || value === "done";
+}
+
+export function isValidProjectMilestone(milestone: import("./types").ProjectMilestone): boolean {
+  return (
+    typeof milestone.id === "string" && milestone.id.length > 0 &&
+    typeof milestone.projectId === "string" && milestone.projectId.length > 0 &&
+    typeof milestone.ownerId === "string" && milestone.ownerId.length > 0 &&
+    typeof milestone.title === "string" && milestone.title.trim().length > 0 &&
+    milestone.title.trim().length <= 200 &&
+    (milestone.description === undefined || (typeof milestone.description === "string" && milestone.description.length <= 2000)) &&
+    isProjectMilestoneStatus(milestone.status) &&
+    (milestone.targetDate === undefined || (typeof milestone.targetDate === "string" && /^\\d{4}-\\d{2}-\\d{2}$/.test(milestone.targetDate)))
+  );
+}
