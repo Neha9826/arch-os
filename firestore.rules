@@ -199,7 +199,8 @@ service cloud.firestore {
           && request.resource.data.title.size() <= 120
           && request.resource.data.status == "open"
           && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time;
+          && request.resource.data.updatedAt == request.time
+          && getAfter(/databases/$(database)/documents/architectures/$(architectureId)/branches/$(request.resource.data.sourceBranchId)).data.pullRequestId == pullRequestId;
 
         allow update: if isParentArchitectureOwner()
           && resource.data.ownerId == request.auth.uid
@@ -211,13 +212,28 @@ service cloud.firestore {
           && request.resource.data.sourceBranchId == resource.data.sourceBranchId
           && request.resource.data.baseSnapshotId == resource.data.baseSnapshotId
           && request.resource.data.sourceBranchName == resource.data.sourceBranchName
-          && request.resource.data.title == resource.data.title
-          && request.resource.data.description == resource.data.description
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.status in ["open", "closed", "merged"]
           && (
-            (resource.data.status == "open" && request.resource.data.status in ["open", "closed", "merged"])
+            (
+              resource.data.status == "open"
+              && request.resource.data.status in ["open", "closed", "merged"]
+              && request.resource.data.title == resource.data.title
+              && request.resource.data.description == resource.data.description
+            )
+            || (
+              resource.data.status == "closed"
+              && request.resource.data.status == "open"
+              && request.resource.data.title is string
+              && request.resource.data.title.size() > 0
+              && request.resource.data.title.size() <= 120
+              && request.resource.data.description is string
+            )
             || request.resource.data.status == resource.data.status
+          )
+          && (
+            request.resource.data.status != "open"
+            || get(/databases/$(database)/documents/architectures/$(architectureId)/branches/$(request.resource.data.sourceBranchId)).data.status == "active"
           )
           && request.resource.data.updatedAt == request.time;
 
@@ -272,6 +288,14 @@ service cloud.firestore {
           && request.resource.data.description is string
           && request.resource.data.description.size() <= 500
           && isValidStatus(request.resource.data.status)
+          && (
+            !request.resource.data.keys().hasAll(['pullRequestId'])
+            || (
+              request.resource.data.pullRequestId is string
+              && get(/databases/$(database)/documents/architectures/$(architectureId)/pullRequests/$(request.resource.data.pullRequestId)).data.sourceBranchId == branchId
+              && get(/databases/$(database)/documents/architectures/$(architectureId)/pullRequests/$(request.resource.data.pullRequestId)).data.ownerId == request.auth.uid
+            )
+          )
           && request.resource.data.architectureIR is map
           && request.resource.data.canvasLayout is map;
 
