@@ -7,6 +7,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  runTransaction,
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -16,7 +17,7 @@ import {
   isValidProjectDescription,
   isValidProjectName,
 } from "@/domain/project/validation";
-import type { Project, ProjectStatus } from "@/domain/project/types";
+import type { Project, ProjectSectionKey, ProjectSectionStatus, ProjectStatus } from "@/domain/project/types";
 
 const PROJECTS_COLLECTION = "projects";
 
@@ -126,4 +127,39 @@ export async function updateProject(input: {
     status: input.status,
     updatedAt: serverTimestamp(),
   });
+export async function updateProjectSectionStatus(input: {
+  projectId: string;
+  ownerId: string;
+  section: ProjectSectionKey;
+  status: ProjectSectionStatus;
+}): Promise<void> {
+  const projectRef = doc(db, PROJECTS_COLLECTION, input.projectId);
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(projectRef);
+
+    if (!snapshot.exists()) {
+      throw new Error("Project not found.");
+    }
+
+    const project = toProject(snapshot.id, snapshot.data());
+
+    if (project.ownerId !== input.ownerId) {
+      throw new Error("You do not have access to this project.");
+    }
+
+    if (project.status !== "active") {
+      throw new Error("Archived projects are read-only.");
+    }
+
+    const sections = project.sections ?? createDefaultProjectSections();
+    sections[input.section] = input.status;
+
+    transaction.update(projectRef, {
+      sections,
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
 }
