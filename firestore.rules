@@ -118,6 +118,42 @@ service cloud.firestore {
       allow delete: if isProjectOwner();
     }
 
+    match /projects/{projectId}/requirements/{requirementId} {
+      function isParentProjectOwner() {
+        return isSignedIn()
+          && exists(/databases/$(database)/documents/projects/$(projectId))
+          && get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid;
+      }
+
+      allow get, list: if isParentProjectOwner();
+
+      allow create: if isParentProjectOwner()
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active"
+        && request.resource.data.projectId == projectId
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200
+        && (!request.resource.data.keys().hasAll(["description"]) || request.resource.data.description is string)
+        && (!request.resource.data.keys().hasAll(["description"]) || request.resource.data.description.size() <= 2000)
+        && request.resource.data.priority in ["low", "medium", "high", "critical"]
+        && request.resource.data.status == "todo";
+
+      allow update: if isParentProjectOwner()
+        && resource.data.projectId == projectId
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.projectId == resource.data.projectId
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.title == resource.data.title
+        && request.resource.data.description == resource.data.description
+        && request.resource.data.priority == resource.data.priority
+        && request.resource.data.status in ["todo", "in-progress", "done"]
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
+
+      allow delete: if isParentProjectOwner()
+        && resource.data.ownerId == request.auth.uid;
+    }
+
     match /architectures/{architectureId} {
       // Existing owner-only documents predate the workspace model. They remain
       // available to their owner and may be associated with a workspace on save.
