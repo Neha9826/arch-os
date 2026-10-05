@@ -47,6 +47,20 @@ export type ProjectMilestone = {
   updatedAt?: unknown;
 };
 
+export type ProjectDesignDecisionStatus = "proposed" | "accepted" | "superseded";
+
+export type ProjectDesignDecision = {
+  id: string;
+  projectId: string;
+  ownerId: string;
+  title: string;
+  decision: string;
+  rationale: string;
+  status: ProjectDesignDecisionStatus;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
 export type ProjectPlanning = {
   objective: string;
   scope: string;
