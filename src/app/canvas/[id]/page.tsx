@@ -95,6 +95,11 @@ function StudioEditor() {
   const router = useRouter();
 
   const projectId = params.id as string;
+  const [containerProjectId] = useState<string | undefined>(() =>
+    typeof window === "undefined"
+      ? undefined
+      : new URLSearchParams(window.location.search).get("projectId") ?? undefined
+  );
   const isNewProject = projectId === "new";
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -492,6 +497,7 @@ function StudioEditor() {
           name: finalTitle,
           ownerId: user.uid,
           workspaceId: resolvedWorkspaceId,
+          projectId: containerProjectId,
           nodes: persistenceState.nodes,
           edges: persistenceState.edges,
           canvasLayout: persistenceState,
@@ -2635,7 +2641,7 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
                     </>
                   )}
                   <p className="mt-3 text-xs text-slate-500">
-                    Canvas positions and styling are not counted as semantic changes, but the branch canvas will become Main's canvas on merge.
+                    Canvas positions and styling are not counted as semantic changes, but the branch canvas will become Main’s canvas on merge.
                   </p>
                 </div>
 

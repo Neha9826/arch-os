@@ -177,7 +177,7 @@ export default function Dashboard() {
         <aside className="w-64 bg-slate-900/50 border-r border-slate-800 p-4 hidden md:flex flex-col shrink-0">
           <div className="space-y-1">
             <button 
-              onClick={() => setActiveTab('projects')}
+              onClick={() => router.push('/projects')}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                 activeTab === 'projects' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
               }`}
