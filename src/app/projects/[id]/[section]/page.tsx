@@ -1,0 +1,204 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { getProject, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
+import { PROJECT_SECTION_KEYS, type Project, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
+import { createDefaultProjectSections } from "@/domain/project/validation";
+
+const META: Record<ProjectSectionKey, { label: string; description: string }> = {
+  planning: { label: "Planning", description: "Goals, scope and project direction." },
+  requirements: { label: "Requirements", description: "Functional and technical requirements." },
+  roadmap: { label: "Roadmap", description: "Milestones, sequencing and delivery." },
+  design: { label: "Design", description: "UX, UI and design system work." },
+  architecture: { label: "Architecture", description: "System topology and architecture decisions." },
+  api: { label: "API", description: "Contracts, endpoints and integrations." },
+  database: { label: "Database", description: "Data models, schemas and storage." },
+  infrastructure: { label: "Infrastructure", description: "Cloud, environments and deployment." },
+  code: { label: "Code", description: "Implementation and engineering work." },
+  testing: { label: "Testing", description: "Quality, verification and test coverage." },
+  documentation: { label: "Documentation", description: "Technical docs and project knowledge." },
+};
+
+const STATUS: Record<ProjectSectionStatus, { label: string; icon: typeof Circle }> = {
+  "not-started": { label: "Not started", icon: Circle },
+  "in-progress": { label: "In progress", icon: Clock3 },
+  complete: { label: "Complete", icon: CheckCircle2 },
+};
+
+export default function ProjectSectionPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const params = useParams();
+  const projectId = params.id as string;
+  const section = PROJECT_SECTION_KEYS.find((key) => key === params.section) as ProjectSectionKey | undefined;
+  const [project, setProject] = useState<Project | null>(null);
+  const [architectures, setArchitectures] = useState<Architecture[]>([]);
+  const [busy, setBusy] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!loading && !user) router.replace("/login");
+  }, [loading, user, router]);
+
+  useEffect(() => {
+    if (!user || !section) return;
+    let cancelled = false;
+    const load = async () => {
+      setBusy(true);
+      try {
+        const current = await getProject(projectId);
+        if (!current || current.ownerId !== user.uid || current.status !== "active") {
+          throw new Error("Project is unavailable or archived.");
+        }
+        const items = section === "architecture"
+          ? await listArchitecturesForProject(projectId, user.uid)
+          : [];
+        if (!cancelled) {
+          setProject(current);
+          setArchitectures(items);
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Section could not be loaded.");
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [projectId, user, section]);
+
+  const currentStatus = project?.sections?.[section ?? "planning"] ?? "not-started";
+  const StatusIcon = STATUS[currentStatus].icon;
+
+  const changeStatus = async (next: ProjectSectionStatus) => {
+    if (!user || !project || !section || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await updateProjectSectionStatus({ projectId: project.id, ownerId: user.uid, section, status: next });
+      setProject((current) => {
+        if (!current) return current;
+        const sections = createDefaultProjectSections();
+        Object.assign(sections, current.sections ?? {});
+        sections[section] = next;
+        return { ...current, sections };
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Section status could not be updated.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading || busy) return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-400">Loading section...</div>;
+  if (!user) return null;
+
+  if (!section) {
+    return (
+      <main className="min-h-screen bg-slate-950 p-8 text-slate-100">
+        <div className="mx-auto max-w-5xl">
+          <button onClick={() => router.push(`/projects/${projectId}`)} className="text-sm text-slate-400 hover:text-white">
+            <ArrowLeft className="mr-2 inline" size={15} /> Project
+          </button>
+          <div className="mt-8 rounded-2xl border border-red-900/60 bg-red-950/30 p-5 text-red-200">Unknown engineering section.</div>
+        </div>
+      </main>
+    );
+  }
+
+  const meta = META[section];
+
+  return (
+    <main className="min-h-screen bg-slate-950 px-6 py-8 text-slate-100">
+      <div className="mx-auto max-w-6xl">
+        <button onClick={() => router.push(`/projects/${projectId}`)} className="mb-6 flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300">
+          <ArrowLeft size={16} /> {project?.name ?? "Project"}
+        </button>
+
+        {error && <div className="mb-6 rounded-2xl border border-red-900/60 bg-red-950/30 p-4 text-sm text-red-200">{error}</div>}
+
+        {project && (
+          <>
+            <header className="border-b border-slate-800 pb-7">
+              <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-blue-400">{project.name}</p>
+                  <h1 className="mt-2 text-3xl font-bold tracking-tight">{meta.label}</h1>
+                  <p className="mt-2 max-w-2xl text-sm text-slate-400">{meta.description}</p>
+                </div>
+                <div className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-300">
+                  <StatusIcon size={16} className="text-blue-400" /> {STATUS[currentStatus].label}
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-wrap gap-2">
+                {PROJECT_SECTION_KEYS.map((key) => (
+                  <button key={key} onClick={() => router.push(`/projects/${projectId}/${key}`)}
+                    className={`rounded-lg border px-3 py-1.5 text-xs transition ${key === section ? "border-blue-700 bg-blue-950/50 text-blue-300" : "border-slate-800 bg-slate-900 text-slate-500 hover:text-slate-300"}`}>
+                    {META[key].label}
+                  </button>
+                ))}
+              </div>
+            </header>
+
+            <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+              <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
+                <div>
+                  <h2 className="font-semibold">Section status</h2>
+                  <p className="mt-1 text-sm text-slate-500">Track this engineering area independently.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(["not-started", "in-progress", "complete"] as ProjectSectionStatus[]).map((value) => (
+                    <button key={value} disabled={saving} onClick={() => void changeStatus(value)}
+                      className={`rounded-lg border px-3 py-2 text-xs ${currentStatus === value ? "border-blue-700 bg-blue-950/60 text-blue-300" : "border-slate-700 bg-slate-950 text-slate-400 hover:text-slate-200"} disabled:opacity-50`}>
+                      {STATUS[value].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {section === "architecture" ? (
+              <section className="mt-6">
+                <div className="mb-4 flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="font-semibold">Architecture workspace</h2>
+                    <p className="mt-1 text-xs text-slate-500">Architecture artifacts already linked to this project.</p>
+                  </div>
+                  <button onClick={() => router.push(`/canvas/new?projectId=${project.id}`)} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold hover:bg-blue-500">
+                    New Architecture
+                  </button>
+                </div>
+                {architectures.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-800 py-16 text-center text-sm text-slate-500">No architectures in this project yet.</div>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {architectures.map((architecture) => (
+                      <button key={architecture.id} onClick={() => router.push(`/canvas/${architecture.id}`)} className="rounded-2xl border border-slate-800 bg-slate-900 p-5 text-left hover:border-slate-700">
+                        <div className="flex items-center justify-between"><Boxes size={18} className="text-blue-400" /><ExternalLink size={14} className="text-slate-600" /></div>
+                        <h3 className="mt-4 font-semibold">{architecture.name}</h3>
+                        <p className="mt-2 text-xs text-slate-500">Open architecture studio</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+            ) : (
+              <section className="mt-6 rounded-2xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center">
+                <h2 className="text-lg font-semibold">{meta.label} workspace ready</h2>
+                <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">
+                  This section now has its own project workspace and persistent status. Its domain artifact model can be added here without changing the project container or architecture history.
+                </p>
+              </section>
+            )}
+          </>
+        )}
+      </div>
+    </main>
+  );
+}
