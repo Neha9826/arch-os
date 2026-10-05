@@ -34,6 +34,8 @@ import {
   isProjectInfrastructureResourceStatus,
   isProjectInfrastructureEnvironment,
   isValidProjectInfrastructureResource,
+  isProjectCodeArtifactStatus,
+  isValidProjectCodeArtifact,
 } from "@/domain/project/validation";
 import type {
   Project,
@@ -56,6 +58,8 @@ import type {
   ProjectInfrastructureResource,
   ProjectInfrastructureResourceStatus,
   ProjectInfrastructureEnvironment,
+  ProjectCodeArtifact,
+  ProjectCodeArtifactStatus,
 } from "@/domain/project/types";
 
 const PROJECTS_COLLECTION = "projects";
@@ -724,6 +728,108 @@ export async function updateProjectInfrastructureResourceStatus(input: {
   }
 
   await updateDoc(resourceRef, {
+    status: input.status,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+
+const PROJECT_CODE_SUBCOLLECTION = "codeArtifacts";
+
+function toProjectCodeArtifact(
+  id: string,
+  data: Record<string, unknown>,
+): ProjectCodeArtifact {
+  return {
+    id,
+    projectId: typeof data.projectId === "string" ? data.projectId : "",
+    ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
+    name: typeof data.name === "string" ? data.name : "",
+    language: typeof data.language === "string" ? data.language : "",
+    runtime: typeof data.runtime === "string" ? data.runtime : "",
+    path: typeof data.path === "string" ? data.path : "",
+    purpose: typeof data.purpose === "string" ? data.purpose : "",
+    status: isProjectCodeArtifactStatus(data.status)
+      ? data.status
+      : "planned",
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+}
+
+export async function listProjectCodeArtifacts(
+  projectId: string,
+  ownerId: string,
+): Promise<ProjectCodeArtifact[]> {
+  const projectRef = await assertActiveProjectOwner(projectId, ownerId);
+  const snapshot = await getDocs(collection(projectRef, PROJECT_CODE_SUBCOLLECTION));
+  return snapshot.docs.map((item) => toProjectCodeArtifact(item.id, item.data()));
+}
+
+export async function createProjectCodeArtifact(input: {
+  projectId: string;
+  ownerId: string;
+  name: string;
+  language: string;
+  runtime: string;
+  path: string;
+  purpose: string;
+}): Promise<string> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const artifactRef = doc(collection(projectRef, PROJECT_CODE_SUBCOLLECTION));
+  const artifact: ProjectCodeArtifact = {
+    id: artifactRef.id,
+    projectId: input.projectId,
+    ownerId: input.ownerId,
+    name: input.name.trim(),
+    language: input.language.trim(),
+    runtime: input.runtime.trim(),
+    path: input.path.trim(),
+    purpose: input.purpose.trim(),
+    status: "planned",
+  };
+
+  if (!isValidProjectCodeArtifact(artifact)) {
+    throw new Error("Invalid project code artifact.");
+  }
+
+  await setDoc(artifactRef, {
+    projectId: artifact.projectId,
+    ownerId: artifact.ownerId,
+    name: artifact.name,
+    language: artifact.language,
+    runtime: artifact.runtime,
+    path: artifact.path,
+    purpose: artifact.purpose,
+    status: artifact.status,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return artifactRef.id;
+}
+
+export async function updateProjectCodeArtifactStatus(input: {
+  projectId: string;
+  artifactId: string;
+  ownerId: string;
+  status: ProjectCodeArtifactStatus;
+}): Promise<void> {
+  if (!isProjectCodeArtifactStatus(input.status)) {
+    throw new Error("Invalid code artifact status.");
+  }
+
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const artifactRef = doc(projectRef, PROJECT_CODE_SUBCOLLECTION, input.artifactId);
+  const snapshot = await getDoc(artifactRef);
+  if (!snapshot.exists()) throw new Error("Code artifact not found.");
+
+  const artifact = toProjectCodeArtifact(snapshot.id, snapshot.data());
+  if (artifact.ownerId !== input.ownerId) {
+    throw new Error("You do not have access to this code artifact.");
+  }
+
+  await updateDoc(artifactRef, {
     status: input.status,
     updatedAt: serverTimestamp(),
   });
