@@ -34,6 +34,7 @@ import {
   type ProjectSectionKey,
   type ProjectSectionStatus,
 } from "@/domain/project/types";
+import { createDefaultProjectSections } from "@/domain/project/validation";
 
 const SECTION_META: Record<
   ProjectSectionKey,
@@ -122,10 +123,9 @@ export default function ProjectDetailPage() {
       setProject((current) => {
         if (!current) return current;
 
-        const nextSections: Record<ProjectSectionKey, ProjectSectionStatus> = {
-          ...(current.sections ?? {}),
-          [section]: status,
-        };
+        const nextSections = createDefaultProjectSections();
+        Object.assign(nextSections, current.sections ?? {});
+        nextSections[section] = status;
 
         return {
           ...current,
