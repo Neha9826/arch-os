@@ -61,6 +61,22 @@ export type ProjectDesignDecision = {
   updatedAt?: unknown;
 };
 
+export type ProjectApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+export type ProjectApiStatus = "draft" | "active" | "deprecated";
+
+export type ProjectApiContract = {
+  id: string;
+  projectId: string;
+  ownerId: string;
+  method: ProjectApiMethod;
+  path: string;
+  title: string;
+  description?: string;
+  status: ProjectApiStatus;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
 export type ProjectPlanning = {
   objective: string;
   scope: string;
