@@ -974,6 +974,47 @@ describe("Project execution task security rules", () => {
     }));
   });
 
+  test("owner can edit mutable execution task fields", async () => {
+    await seedProject();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "projects", executionProject, "executionTasks", executionTask),
+        taskData,
+      );
+    });
+
+    const taskRef = doc(authenticatedDb(userA), "projects", executionProject, "executionTasks", executionTask);
+    await assertSucceeds(updateDoc(taskRef, {
+      title: "Implement execution flow v2",
+      description: "Updated workflow.",
+      priority: "critical",
+      status: "blocked",
+      section: "testing",
+      sourceId: "test-case-a",
+      dueDate: "2026-11-01",
+    }));
+  });
+
+  test("execution task edits cannot add unexpected fields or mutate ownership", async () => {
+    await seedProject();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "projects", executionProject, "executionTasks", executionTask),
+        taskData,
+      );
+    });
+
+    const taskRef = doc(authenticatedDb(userA), "projects", executionProject, "executionTasks", executionTask);
+    await assertFails(updateDoc(taskRef, {
+      title: "Forged",
+      unexpected: true,
+    }));
+    await assertFails(updateDoc(taskRef, {
+      title: "Forged",
+      ownerId: userB.uid,
+    }));
+  });
+
   test("owner can delete an execution task on an active project but not an archived project", async () => {
     await seedProject();
     await testEnv.withSecurityRulesDisabled(async (context) => {
