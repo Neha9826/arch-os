@@ -17,7 +17,7 @@ import {
   isProjectSectionKey,
   isValidProjectDescription,
   isValidProjectName,
-  isValidProjectSectionStatus,
+  isProjectSectionStatus,
 } from "@/domain/project/validation";
 import type {
   Project,
@@ -146,7 +146,7 @@ export async function updateProjectSectionStatus(input: {
     throw new Error("Invalid project section.");
   }
 
-  if (!isValidProjectSectionStatus(input.status)) {
+  if (!isProjectSectionStatus(input.status)) {
     throw new Error("Invalid project section status.");
   }
 
