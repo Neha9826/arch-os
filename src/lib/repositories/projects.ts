@@ -22,6 +22,8 @@ import {
   isProjectRequirementPriority,
   isProjectRequirementStatus,
   isValidProjectRequirement,
+  isProjectMilestoneStatus,
+  isValidProjectMilestone,
 } from "@/domain/project/validation";
 import type {
   Project,
@@ -32,6 +34,8 @@ import type {
   ProjectRequirement,
   ProjectRequirementPriority,
   ProjectRequirementStatus,
+  ProjectMilestone,
+  ProjectMilestoneStatus,
 } from "@/domain/project/types";
 
 const PROJECTS_COLLECTION = "projects";
@@ -299,4 +303,85 @@ export async function updateProjectRequirementStatus(input: {
   const requirement = toProjectRequirement(snapshot.id, snapshot.data());
   if (requirement.ownerId !== input.ownerId) throw new Error("You do not have access to this requirement.");
   await updateDoc(requirementRef, { status: input.status, updatedAt: serverTimestamp() });
+}
+
+
+const PROJECT_ROADMAP_SUBCOLLECTION = "roadmap";
+
+function toProjectMilestone(id: string, data: Record<string, unknown>): ProjectMilestone {
+  return {
+    id,
+    projectId: typeof data.projectId === "string" ? data.projectId : "",
+    ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
+    title: typeof data.title === "string" ? data.title : "",
+    description: typeof data.description === "string" ? data.description : undefined,
+    status: isProjectMilestoneStatus(data.status) ? data.status : "planned",
+    targetDate: typeof data.targetDate === "string" ? data.targetDate : undefined,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+}
+
+async function assertActiveProjectOwner(projectId: string, ownerId: string) {
+  const projectRef = doc(db, PROJECTS_COLLECTION, projectId);
+  const snapshot = await getDoc(projectRef);
+  if (!snapshot.exists()) throw new Error("Project not found.");
+  const project = snapshot.data();
+  if (project.ownerId !== ownerId) throw new Error("You do not have access to this project.");
+  if (project.status !== "active") throw new Error("Archived projects are read-only.");
+  return projectRef;
+}
+
+export async function listProjectMilestones(projectId: string, ownerId: string): Promise<ProjectMilestone[]> {
+  const projectRef = await assertActiveProjectOwner(projectId, ownerId);
+  const snapshot = await getDocs(collection(projectRef, PROJECT_ROADMAP_SUBCOLLECTION));
+  return snapshot.docs.map((item) => toProjectMilestone(item.id, item.data()));
+}
+
+export async function createProjectMilestone(input: {
+  projectId: string;
+  ownerId: string;
+  title: string;
+  description?: string;
+  targetDate?: string;
+}): Promise<string> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const milestoneRef = doc(collection(projectRef, PROJECT_ROADMAP_SUBCOLLECTION));
+  const milestone: ProjectMilestone = {
+    id: milestoneRef.id,
+    projectId: input.projectId,
+    ownerId: input.ownerId,
+    title: input.title.trim(),
+    description: input.description?.trim() || undefined,
+    status: "planned",
+    targetDate: input.targetDate || undefined,
+  };
+  if (!isValidProjectMilestone(milestone)) throw new Error("Invalid project milestone.");
+  await setDoc(milestoneRef, {
+    projectId: milestone.projectId,
+    ownerId: milestone.ownerId,
+    title: milestone.title,
+    ...(milestone.description ? { description: milestone.description } : {}),
+    status: milestone.status,
+    ...(milestone.targetDate ? { targetDate: milestone.targetDate } : {}),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return milestoneRef.id;
+}
+
+export async function updateProjectMilestoneStatus(input: {
+  projectId: string;
+  milestoneId: string;
+  ownerId: string;
+  status: ProjectMilestoneStatus;
+}): Promise<void> {
+  if (!isProjectMilestoneStatus(input.status)) throw new Error("Invalid milestone status.");
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const milestoneRef = doc(projectRef, PROJECT_ROADMAP_SUBCOLLECTION, input.milestoneId);
+  const snapshot = await getDoc(milestoneRef);
+  if (!snapshot.exists()) throw new Error("Milestone not found.");
+  const milestone = toProjectMilestone(snapshot.id, snapshot.data());
+  if (milestone.ownerId !== input.ownerId) throw new Error("You do not have access to this milestone.");
+  await updateDoc(milestoneRef, { status: input.status, updatedAt: serverTimestamp() });
 }
