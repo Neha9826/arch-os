@@ -77,6 +77,19 @@ export type ProjectApiContract = {
   updatedAt?: unknown;
 };
 
+export type ProjectDatabaseEntityStatus = "draft" | "active" | "deprecated";
+
+export type ProjectDatabaseEntity = {
+  id: string;
+  projectId: string;
+  ownerId: string;
+  name: string;
+  purpose: string;
+  status: ProjectDatabaseEntityStatus;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
 export type ProjectPlanning = {
   objective: string;
   scope: string;
