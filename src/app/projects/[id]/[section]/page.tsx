@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { createProjectMilestone, createProjectRequirement, getProject, listProjectMilestones, listProjectRequirements, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { createProjectDesignDecision, createProjectMilestone, createProjectRequirement, getProject, listProjectDesignDecisions, listProjectMilestones, listProjectRequirements, updateProjectDesignDecisionStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
-import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
+import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
 
 const META: Record<ProjectSectionKey, { label: string; description: string }> = {
@@ -48,6 +48,9 @@ export default function ProjectSectionPage() {
   const [milestones, setMilestones] = useState<ProjectMilestone[]>([]);
   const [newMilestone, setNewMilestone] = useState({ title: "", description: "", targetDate: "" });
   const [savingMilestone, setSavingMilestone] = useState(false);
+  const [designDecisions, setDesignDecisions] = useState<ProjectDesignDecision[]>([]);
+  const [newDesignDecision, setNewDesignDecision] = useState({ title: "", decision: "", rationale: "" });
+  const [savingDesignDecision, setSavingDesignDecision] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -69,6 +72,10 @@ export default function ProjectSectionPage() {
         if (!cancelled) {
           setProject(current);
           setArchitectures(items);
+        }
+        if (section === "design") {
+          const decisionItems = await listProjectDesignDecisions(projectId, user.uid);
+          if (!cancelled) setDesignDecisions(decisionItems);
         }
         if (section === "roadmap") {
           const milestoneItems = await listProjectMilestones(projectId, user.uid);
@@ -179,7 +186,55 @@ export default function ProjectSectionPage() {
               </div>
             </section>
 
-            {section === "roadmap" ? (
+            {section === "design" ? (
+              <section className="mt-6 space-y-6">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+                  <h2 className="font-semibold">Add design decision</h2>
+                  <div className="mt-5 grid gap-4">
+                    <input value={newDesignDecision.title} onChange={(e) => setNewDesignDecision((v) => ({ ...v, title: e.target.value }))} maxLength={200} placeholder="Decision title" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <textarea value={newDesignDecision.decision} onChange={(e) => setNewDesignDecision((v) => ({ ...v, decision: e.target.value }))} maxLength={5000} rows={4} placeholder="What design choice are we making?" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <textarea value={newDesignDecision.rationale} onChange={(e) => setNewDesignDecision((v) => ({ ...v, rationale: e.target.value }))} maxLength={5000} rows={4} placeholder="Why is this the right choice?" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <div className="flex justify-end">
+                      <button disabled={savingDesignDecision || !newDesignDecision.title.trim() || !newDesignDecision.decision.trim()} onClick={async () => {
+                        if (!user || !project) return;
+                        setSavingDesignDecision(true); setError(null);
+                        try {
+                          await createProjectDesignDecision({ projectId: project.id, ownerId: user.uid, ...newDesignDecision });
+                          setDesignDecisions(await listProjectDesignDecisions(project.id, user.uid));
+                          setNewDesignDecision({ title: "", decision: "", rationale: "" });
+                        } catch (err) { setError(err instanceof Error ? err.message : "Design decision could not be created."); }
+                        finally { setSavingDesignDecision(false); }
+                      }} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50">{savingDesignDecision ? "Adding..." : "Add decision"}</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {designDecisions.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No design decisions recorded yet.</div>
+                  ) : designDecisions.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{item.title}</h3><span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{item.status}</span></div>
+                          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{item.decision}</p>
+                          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-500"><span className="text-slate-400">Rationale:</span> {item.rationale || "Not provided."}</p>
+                        </div>
+                        <select value={item.status} onChange={async (e) => {
+                          if (!user || !project) return;
+                          const status = e.target.value as ProjectDesignDecisionStatus;
+                          try {
+                            await updateProjectDesignDecisionStatus({ projectId: project.id, decisionId: item.id, ownerId: user.uid, status });
+                            setDesignDecisions((items) => items.map((current) => current.id === item.id ? { ...current, status } : current));
+                          } catch (err) { setError(err instanceof Error ? err.message : "Design decision status could not be updated."); }
+                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                          <option value="proposed">Proposed</option><option value="accepted">Accepted</option><option value="superseded">Superseded</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : section === "roadmap" ? (
               <section className="mt-6 space-y-6">
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
                   <h2 className="font-semibold">Add milestone</h2>
