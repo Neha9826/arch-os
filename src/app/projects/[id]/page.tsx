@@ -119,17 +119,19 @@ export default function ProjectDetailPage() {
         section,
         status,
       });
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              sections: {
-                ...(current.sections ?? {}),
-                [section]: status,
-              },
-            }
-          : current,
-      );
+      setProject((current) => {
+        if (!current) return current;
+
+        const nextSections: Record<ProjectSectionKey, ProjectSectionStatus> = {
+          ...(current.sections ?? {}),
+          [section]: status,
+        };
+
+        return {
+          ...current,
+          sections: nextSections,
+        };
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Section status could not be updated.");
     } finally {
