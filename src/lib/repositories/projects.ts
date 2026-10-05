@@ -43,14 +43,13 @@ export async function listProjectsForWorkspace(
 ): Promise<Project[]> {
   const projectsQuery = query(
     collection(db, PROJECTS_COLLECTION),
-    where("workspaceId", "==", workspaceId),
     where("ownerId", "==", ownerId),
   );
   const snapshot = await getDocs(projectsQuery);
 
-  return snapshot.docs.map((project) =>
-    toProject(project.id, project.data()),
-  );
+  return snapshot.docs
+    .map((project) => toProject(project.id, project.data()))
+    .filter((project) => project.workspaceId === workspaceId);
 }
 
 export async function getProject(projectId: string): Promise<Project | null> {
