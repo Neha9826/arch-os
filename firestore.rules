@@ -384,6 +384,46 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid;
     }
 
+    match /projects/{projectId}/documentation/{documentationId} {
+      function isParentProjectOwner() {
+        return isSignedIn()
+          && exists(/databases/$(database)/documents/projects/$(projectId))
+          && get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid;
+      }
+
+      allow get, list: if isParentProjectOwner();
+
+      allow create: if isParentProjectOwner()
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active"
+        && request.resource.data.projectId == projectId
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200
+        && request.resource.data.type in ["readme", "api", "architecture", "runbook", "decision", "guide", "other"]
+        && request.resource.data.path is string
+        && request.resource.data.path.size() > 0
+        && request.resource.data.path.size() <= 500
+        && request.resource.data.summary is string
+        && request.resource.data.summary.size() <= 2000
+        && request.resource.data.status == "planned";
+
+      allow update: if isParentProjectOwner()
+        && resource.data.projectId == projectId
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.projectId == resource.data.projectId
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.title == resource.data.title
+        && request.resource.data.type == resource.data.type
+        && request.resource.data.path == resource.data.path
+        && request.resource.data.summary == resource.data.summary
+        && request.resource.data.status in ["planned", "draft", "published", "deprecated"]
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
+
+      allow delete: if isParentProjectOwner()
+        && resource.data.ownerId == request.auth.uid;
+    }
+
     match /projects/{projectId}/testCases/{testCaseId} {
       function isParentProjectOwner() {
         return isSignedIn()
