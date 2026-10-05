@@ -56,7 +56,7 @@ export default function ProjectsPage() {
       setName("");
       setDescription("");
       setShowCreate(false);
-      router.push(\`/projects/\${id}\`);
+      router.push(`/projects/${id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Project could not be created.");
     } finally {
@@ -65,7 +65,7 @@ export default function ProjectsPage() {
   };
 
   const archiveProject = async (project: Project) => {
-    if (!confirm(\`Archive "\${project.name}"?\`)) return;
+    if (!confirm(`Archive "${project.name}"?`)) return;
     try {
       await updateProject({ projectId: project.id, name: project.name, description: project.description, status: "archived" });
       setProjects((items) => items.map((item) => item.id === project.id ? { ...item, status: "archived" } : item));
@@ -109,7 +109,7 @@ export default function ProjectsPage() {
                   {project.status === "active" && <button onClick={() => void archiveProject(project)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-800 hover:text-amber-300" title="Archive"><Archive size={16} /></button>}
                 </div>
                 <p className="mt-4 min-h-10 text-sm text-slate-400">{project.description || "No project description yet."}</p>
-                <button onClick={() => router.push(\`/projects/\${project.id}\`)} className="mt-5 flex w-full items-center justify-between border-t border-slate-800 pt-4 text-sm font-medium text-blue-400 hover:text-blue-300">Open project <ArrowRight size={16} /></button>
+                <button onClick={() => router.push(`/projects/${project.id}`)} className="mt-5 flex w-full items-center justify-between border-t border-slate-800 pt-4 text-sm font-medium text-blue-400 hover:text-blue-300">Open project <ArrowRight size={16} /></button>
               </div>
             ))}
           </div>
