@@ -14,10 +14,17 @@ import { db } from "@/lib/firebase";
 import {
   assertValidProject,
   createDefaultProjectSections,
+  isProjectSectionKey,
   isValidProjectDescription,
   isValidProjectName,
+  isValidProjectSectionStatus,
 } from "@/domain/project/validation";
-import type { Project, ProjectSectionKey, ProjectSectionStatus, ProjectStatus } from "@/domain/project/types";
+import type {
+  Project,
+  ProjectSectionKey,
+  ProjectSectionStatus,
+  ProjectStatus,
+} from "@/domain/project/types";
 
 const PROJECTS_COLLECTION = "projects";
 
@@ -127,12 +134,22 @@ export async function updateProject(input: {
     status: input.status,
     updatedAt: serverTimestamp(),
   });
+}
+
 export async function updateProjectSectionStatus(input: {
   projectId: string;
   ownerId: string;
   section: ProjectSectionKey;
   status: ProjectSectionStatus;
 }): Promise<void> {
+  if (!isProjectSectionKey(input.section)) {
+    throw new Error("Invalid project section.");
+  }
+
+  if (!isValidProjectSectionStatus(input.status)) {
+    throw new Error("Invalid project section status.");
+  }
+
   const projectRef = doc(db, PROJECTS_COLLECTION, input.projectId);
 
   await runTransaction(db, async (transaction) => {
@@ -152,7 +169,9 @@ export async function updateProjectSectionStatus(input: {
       throw new Error("Archived projects are read-only.");
     }
 
-    const sections = project.sections ?? createDefaultProjectSections();
+    const sections = {
+      ...(project.sections ?? createDefaultProjectSections()),
+    };
     sections[input.section] = input.status;
 
     transaction.update(projectRef, {
@@ -160,6 +179,4 @@ export async function updateProjectSectionStatus(input: {
       updatedAt: serverTimestamp(),
     });
   });
-}
-
 }
