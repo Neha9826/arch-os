@@ -12,6 +12,7 @@ import {
 import { db } from "@/lib/firebase";
 import {
   assertValidProject,
+  createDefaultProjectSections,
   isValidProjectDescription,
   isValidProjectName,
 } from "@/domain/project/validation";
@@ -29,8 +30,8 @@ function toProject(id: string, data: Record<string, unknown>): Project {
     name: typeof data.name === "string" ? data.name : "",
     description:
       typeof data.description === "string" ? data.description : undefined,
-    status:
-      data.status === "archived" ? "archived" : "active",
+    status: data.status === "archived" ? "archived" : "active",
+    sections: data.sections as Project["sections"],
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };
@@ -85,6 +86,7 @@ export async function createProject(input: {
     name: input.name.trim(),
     description: input.description?.trim() || undefined,
     status: "active",
+    sections: createDefaultProjectSections(),
   };
 
   assertValidProject(project);
@@ -96,6 +98,7 @@ export async function createProject(input: {
     name: project.name,
     ...(project.description ? { description: project.description } : {}),
     status: project.status,
+    sections: project.sections,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
