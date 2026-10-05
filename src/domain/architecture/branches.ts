@@ -14,6 +14,7 @@ export type ArchitectureBranch = {
   description?: string;
   baseSnapshotId: string;
   status: ArchitectureBranchStatus;
+  pullRequestId?: string;
   architectureIR: ArchitectureIR;
   canvasLayout: ReactFlowArchitectureState;
   createdAt?: unknown;
