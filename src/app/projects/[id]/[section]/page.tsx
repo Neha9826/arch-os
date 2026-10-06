@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, updateProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
 import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectTestCase, type ProjectTestStatus, type ProjectTestType, type ProjectDocumentationEntry, type ProjectDocumentationStatus, type ProjectDocumentationType, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
@@ -61,6 +61,9 @@ export default function ProjectSectionPage() {
   const [apiContracts, setApiContracts] = useState<ProjectApiContract[]>([]);
   const [newApiContract, setNewApiContract] = useState({ method: "GET" as ProjectApiMethod, path: "", title: "", description: "" });
   const [savingApiContract, setSavingApiContract] = useState(false);
+  const [editingApiContractId, setEditingApiContractId] = useState<string | null>(null);
+  const [editingApiContract, setEditingApiContract] = useState({ method: "GET" as ProjectApiMethod, path: "", title: "", description: "" });
+  const [savingApiContractEdit, setSavingApiContractEdit] = useState(false);
   const [databaseEntities, setDatabaseEntities] = useState<ProjectDatabaseEntity[]>([]);
   const [newDatabaseEntity, setNewDatabaseEntity] = useState({ name: "", purpose: "" });
   const [savingDatabaseEntity, setSavingDatabaseEntity] = useState(false);
@@ -577,36 +580,63 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No API contracts defined yet.</div>
                   ) : apiContracts.map((contract) => (
                     <div key={contract.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-md border border-blue-900/60 bg-blue-950/40 px-2 py-1 text-[10px] font-semibold text-blue-300">{contract.method}</span>
-                            <code className="text-sm text-slate-300">{contract.path}</code>
-                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500">{contract.status}</span>
+                      {editingApiContractId === contract.id ? (
+                        <div className="space-y-3">
+                          <div className="grid gap-3 sm:grid-cols-[140px_1fr]">
+                            <select value={editingApiContract.method} onChange={(e) => setEditingApiContract((v) => ({ ...v, method: e.target.value as ProjectApiMethod }))} aria-label="HTTP method" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select>
+                            <input value={editingApiContract.path} onChange={(e) => setEditingApiContract((v) => ({ ...v, path: e.target.value }))} maxLength={300} aria-label="API path" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
                           </div>
-                          <h3 className="mt-3 font-semibold">{contract.title}</h3>
-                          {contract.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{contract.description}</p>}
+                          <input value={editingApiContract.title} onChange={(e) => setEditingApiContract((v) => ({ ...v, title: e.target.value }))} maxLength={200} aria-label="Contract title" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <textarea value={editingApiContract.description} onChange={(e) => setEditingApiContract((v) => ({ ...v, description: e.target.value }))} maxLength={2000} rows={3} aria-label="Contract description" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={savingApiContractEdit || !editingApiContract.path.trim().startsWith("/") || !editingApiContract.title.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingApiContractEdit(true); setError(null);
+                              try {
+                                await updateProjectApiContract({ projectId: project.id, contractId: contract.id, ownerId: user.uid, ...editingApiContract });
+                                setApiContracts((items) => items.map((item) => item.id === contract.id ? { ...item, ...editingApiContract, path: editingApiContract.path.trim(), title: editingApiContract.title.trim(), description: editingApiContract.description.trim() || undefined } : item));
+                                setEditingApiContractId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "API contract could not be saved."); }
+                              finally { setSavingApiContractEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingApiContractEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingApiContractId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
+                          </div>
                         </div>
-                        <select value={contract.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectApiStatus;
-                          try {
-                            await updateProjectApiContractStatus({ projectId: project.id, contractId: contract.id, ownerId: user.uid, status });
-                            setApiContracts((items) => items.map((item) => item.id === contract.id ? { ...item, status } : item));
-                          } catch (err) { setError(err instanceof Error ? err.message : "API contract status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="draft">Draft</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
-                        </select>
-                        <button type="button" disabled={deletingRequirementId === contract.id} onClick={async () => {
-                          if (!user || !project || !window.confirm("Delete this API contract? This cannot be undone.")) return;
-                          setDeletingRequirementId(contract.id); setError(null);
-                          try {
-                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: contract.id, ownerId: user.uid, collectionName: "apiContracts" });
-                            setApiContracts((items) => items.filter((current) => current.id !== contract.id));
-                          } catch (err) { setError(err instanceof Error ? err.message : "The API contract could not be deleted."); }
-                          finally { setDeletingRequirementId(null); }
-                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === contract.id ? "Deleting..." : "Delete"}</button>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-md border border-blue-900/60 bg-blue-950/40 px-2 py-1 text-[10px] font-semibold text-blue-300">{contract.method}</span>
+                              <code className="text-sm text-slate-300">{contract.path}</code>
+                              <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500">{contract.status}</span>
+                            </div>
+                            <h3 className="mt-3 font-semibold">{contract.title}</h3>
+                            {contract.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{contract.description}</p>}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={contract.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectApiStatus;
+                              try {
+                                await updateProjectApiContractStatus({ projectId: project.id, contractId: contract.id, ownerId: user.uid, status });
+                                setApiContracts((items) => items.map((item) => item.id === contract.id ? { ...item, status } : item));
+                              } catch (err) { setError(err instanceof Error ? err.message : "API contract status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="draft">Draft</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
+                            </select>
+                            <button onClick={() => { setEditingApiContractId(contract.id); setEditingApiContract({ method: contract.method, path: contract.path, title: contract.title, description: contract.description ?? "" }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === contract.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this API contract? This cannot be undone.")) return;
+                              setDeletingRequirementId(contract.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: contract.id, ownerId: user.uid, collectionName: "apiContracts" });
+                                setApiContracts((items) => items.filter((current) => current.id !== contract.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The API contract could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === contract.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
