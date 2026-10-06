@@ -303,8 +303,8 @@ service cloud.firestore {
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 200
-        && request.resource.data.description is string
-        && request.resource.data.description.size() <= 2000
+        && (!request.resource.data.keys().hasAll(["description"]) || request.resource.data.description is string)
+        && (!request.resource.data.keys().hasAll(["description"]) || request.resource.data.description.size() <= 2000)
         && request.resource.data.priority in ["low", "medium", "high", "critical"]
         && request.resource.data.status in ["todo", "in-progress", "done"]
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["title", "description", "priority", "status", "updatedAt"])
