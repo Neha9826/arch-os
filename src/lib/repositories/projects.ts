@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  deleteDoc,
   getDoc,
   getDocs,
   query,
@@ -339,6 +340,54 @@ export async function updateProjectRequirementStatus(input: {
   const requirement = toProjectRequirement(snapshot.id, snapshot.data());
   if (requirement.ownerId !== input.ownerId) throw new Error("You do not have access to this requirement.");
   await updateDoc(requirementRef, { status: input.status, updatedAt: serverTimestamp() });
+}
+
+export async function updateProjectRequirement(input: {
+  projectId: string;
+  requirementId: string;
+  ownerId: string;
+  title: string;
+  description?: string;
+  priority: ProjectRequirementPriority;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const requirementRef = doc(projectRef, PROJECT_REQUIREMENTS_SUBCOLLECTION, input.requirementId);
+  const snapshot = await getDoc(requirementRef);
+  if (!snapshot.exists()) throw new Error("Requirement not found.");
+
+  const existing = toProjectRequirement(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId) throw new Error("You do not have access to this requirement.");
+
+  const requirement: ProjectRequirement = {
+    ...existing,
+    title: input.title.trim(),
+    description: input.description?.trim() || undefined,
+    priority: input.priority,
+  };
+  if (!isValidProjectRequirement(requirement)) throw new Error("Invalid project requirement.");
+
+  await updateDoc(requirementRef, {
+    title: requirement.title,
+    description: requirement.description ?? "",
+    priority: requirement.priority,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteProjectRequirement(input: {
+  projectId: string;
+  requirementId: string;
+  ownerId: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const requirementRef = doc(projectRef, PROJECT_REQUIREMENTS_SUBCOLLECTION, input.requirementId);
+  const snapshot = await getDoc(requirementRef);
+  if (!snapshot.exists()) throw new Error("Requirement not found.");
+
+  const requirement = toProjectRequirement(snapshot.id, snapshot.data());
+  if (requirement.ownerId !== input.ownerId) throw new Error("You do not have access to this requirement.");
+
+  await deleteDoc(requirementRef);
 }
 
 
