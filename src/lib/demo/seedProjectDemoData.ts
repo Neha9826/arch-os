@@ -19,8 +19,10 @@ import {
   listProjectTestCases,
   updateProjectPlanning,
 } from "@/lib/repositories/projects";
-import { createProjectExecutionTask, listProjectExecutionTasks } from "@/lib/repositories/projectExecution";
-import { createArchitecture, listArchitecturesForProject } from "@/lib/repositories/architectures";
+import { createProjectExecutionTask, deleteProjectExecutionTask, listProjectExecutionTasks } from "@/lib/repositories/projectExecution";
+import { createArchitecture, deleteArchitecture, listArchitecturesForProject } from "@/lib/repositories/architectures";
+import { collection, deleteDoc, doc, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import type { Project } from "@/domain/project/types";
 
 const DEMO_PREFIX = "DEMO ·";
@@ -133,4 +135,79 @@ export async function seedProjectDemoData(project: Project, ownerId: string) {
   }
 
   return results;
+}
+
+
+/**
+ * Removes only records created by this demo seeder for the specified project.
+ * User-created records are deliberately left untouched.
+ */
+export async function resetProjectDemoData(project: Project, ownerId: string) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Demo data is only available in development mode.");
+  }
+  if (project.ownerId !== ownerId || project.status !== "active") {
+    throw new Error("Only your active project can be reset.");
+  }
+
+  const removed: string[] = [];
+  const demoName = (value: unknown) => typeof value === "string" && value.startsWith(DEMO_PREFIX);
+  const projectPath = (subcollection: string) => collection(db, "projects", project.id, subcollection);
+  const removePrefixed = async (subcollection: string, fields: string[]) => {
+    const snapshot = await getDocs(projectPath(subcollection));
+    let count = 0;
+    for (const item of snapshot.docs) {
+      const data = item.data();
+      if (data.ownerId !== ownerId || !fields.some((field) => demoName(data[field]))) continue;
+      await deleteDoc(doc(db, "projects", project.id, subcollection, item.id));
+      count++;
+    }
+    if (count) removed.push(`${subcollection} (${count})`);
+  };
+
+  await removePrefixed("requirements", ["title"]);
+  await removePrefixed("roadmap", ["title"]);
+  await removePrefixed("designDecisions", ["title"]);
+  await removePrefixed("apiContracts", ["title"]);
+  await removePrefixed("infrastructureResources", ["name"]);
+  await removePrefixed("codeArtifacts", ["name"]);
+  await removePrefixed("testCases", ["name"]);
+  await removePrefixed("documentation", ["title"]);
+
+  const entities = await getDocs(projectPath("databaseEntities"));
+  let entityCount = 0;
+  for (const item of entities.docs) {
+    const data = item.data();
+    if (data.ownerId === ownerId && data.name === "demo_project_memberships") {
+      await deleteDoc(doc(db, "projects", project.id, "databaseEntities", item.id));
+      entityCount++;
+    }
+  }
+  if (entityCount) removed.push(`databaseEntities (${entityCount})`);
+
+  const tasks = await listProjectExecutionTasks(project.id, ownerId);
+  const demoTasks = tasks.filter((task) => demoName(task.title));
+  for (const task of demoTasks) {
+    await deleteProjectExecutionTask({ projectId: project.id, taskId: task.id, ownerId });
+  }
+  if (demoTasks.length) removed.push(`executionTasks (${demoTasks.length})`);
+
+  const architectures = await listArchitecturesForProject(project.id, ownerId);
+  const demoArchitectures = architectures.filter((architecture) => demoName(architecture.name));
+  for (const architecture of demoArchitectures) {
+    await deleteArchitecture(architecture.id);
+  }
+  if (demoArchitectures.length) removed.push(`architectures (${demoArchitectures.length})`);
+
+  const seededObjective = "Build a secure multi-tenant SaaS workspace for planning, designing, and tracking software delivery.";
+  if (project.planning?.objective === seededObjective) {
+    await updateProjectPlanning({
+      projectId: project.id,
+      ownerId,
+      planning: { objective: "", scope: "", constraints: "", successCriteria: "" },
+    });
+    removed.push("planning");
+  }
+
+  return removed;
 }
