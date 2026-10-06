@@ -306,6 +306,28 @@ describe("Project security rules", () => {
     );
   });
 
+  test("owner can edit documentation details without changing ownership", async () => {
+    await seedWorkspace(workspaceA, userA.uid);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await setDoc(doc(firestore, "projects", projectA), projectData);
+      await setDoc(doc(firestore, "projects", projectA, "documentation", "doc-a"), {
+        projectId: projectA, ownerId: userA.uid, title: "API guide", type: "api",
+        path: "docs/api.md", summary: "Original summary", status: "planned",
+      });
+    });
+    await assertSucceeds(updateDoc(doc(db(userA), "projects", projectA, "documentation", "doc-a"), {
+      title: "API reference", type: "guide", path: "docs/reference.md",
+      summary: "Updated summary", updatedAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(db(userA), "projects", projectA, "documentation", "doc-a"), {
+      ownerId: userB.uid, updatedAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(db(userB), "projects", projectA, "documentation", "doc-a"), {
+      title: "Unauthorized", updatedAt: new Date(),
+    }));
+  });
+
   test("owner can edit test case details without changing ownership", async () => {
     await seedWorkspace(workspaceA, userA.uid);
     await testEnv.withSecurityRulesDisabled(async (context) => {
