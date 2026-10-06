@@ -269,6 +269,43 @@ describe("Project security rules", () => {
     );
   });
 
+  test("owner can edit roadmap milestone details without changing ownership", async () => {
+    await seedWorkspace(workspaceA, userA.uid);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await setDoc(doc(firestore, "projects", projectA), projectData);
+      await setDoc(doc(firestore, "projects", projectA, "roadmap", "milestone-a"), {
+        projectId: projectA,
+        ownerId: userA.uid,
+        title: "Original milestone",
+        description: "Original details",
+        targetDate: "2026-11-01",
+        status: "planned",
+      });
+    });
+
+    await assertSucceeds(
+      updateDoc(doc(db(userA), "projects", projectA, "roadmap", "milestone-a"), {
+        title: "Updated milestone",
+        description: "Updated details",
+        targetDate: "2026-12-01",
+        updatedAt: new Date(),
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(db(userA), "projects", projectA, "roadmap", "milestone-a"), {
+        ownerId: userB.uid,
+        updatedAt: new Date(),
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(db(userB), "projects", projectA, "roadmap", "milestone-a"), {
+        title: "Unauthorized edit",
+        updatedAt: new Date(),
+      }),
+    );
+  });
+
   test("project owner can delete an engineering record but another user cannot", async () => {
     await seedWorkspace(workspaceA, userA.uid);
     await testEnv.withSecurityRulesDisabled(async (context) => {
