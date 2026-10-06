@@ -412,12 +412,21 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.projectId == resource.data.projectId
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.name == resource.data.name
-        && request.resource.data.language == resource.data.language
-        && request.resource.data.runtime == resource.data.runtime
-        && request.resource.data.path == resource.data.path
-        && request.resource.data.purpose == resource.data.purpose
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 160
+        && request.resource.data.language is string
+        && request.resource.data.language.size() > 0
+        && request.resource.data.language.size() <= 100
+        && request.resource.data.runtime is string
+        && request.resource.data.runtime.size() <= 100
+        && request.resource.data.path is string
+        && request.resource.data.path.size() > 0
+        && request.resource.data.path.size() <= 500
+        && request.resource.data.purpose is string
+        && request.resource.data.purpose.size() <= 2000
         && request.resource.data.status in ["planned", "active", "deprecated"]
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "language", "runtime", "path", "purpose", "status", "updatedAt"])
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner()
