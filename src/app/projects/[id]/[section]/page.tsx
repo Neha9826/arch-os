@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { createProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
 import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectTestCase, type ProjectTestStatus, type ProjectTestType, type ProjectDocumentationEntry, type ProjectDocumentationStatus, type ProjectDocumentationType, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
@@ -45,6 +45,10 @@ export default function ProjectSectionPage() {
   const [requirements, setRequirements] = useState<ProjectRequirement[]>([]);
   const [newRequirement, setNewRequirement] = useState({ title: "", description: "", priority: "medium" as ProjectRequirementPriority });
   const [savingRequirement, setSavingRequirement] = useState(false);
+  const [editingRequirementId, setEditingRequirementId] = useState<string | null>(null);
+  const [editingRequirement, setEditingRequirement] = useState({ title: "", description: "", priority: "medium" as ProjectRequirementPriority });
+  const [savingRequirementEdit, setSavingRequirementEdit] = useState(false);
+  const [deletingRequirementId, setDeletingRequirementId] = useState<string | null>(null);
   const [milestones, setMilestones] = useState<ProjectMilestone[]>([]);
   const [newMilestone, setNewMilestone] = useState({ title: "", description: "", targetDate: "" });
   const [savingMilestone, setSavingMilestone] = useState(false);
@@ -725,25 +729,63 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No requirements defined yet.</div>
                   ) : requirements.map((requirement) => (
                     <div key={requirement.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-semibold">{requirement.title}</h3>
-                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{requirement.priority}</span>
+                      {editingRequirementId === requirement.id ? (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <h3 className="font-semibold">Edit requirement</h3>
+                            <button onClick={() => setEditingRequirementId(null)} className="text-xs text-slate-400 hover:text-white">Cancel</button>
                           </div>
-                          {requirement.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{requirement.description}</p>}
+                          <input value={editingRequirement.title} onChange={(e) => setEditingRequirement((value) => ({ ...value, title: e.target.value }))} maxLength={200} placeholder="Requirement title" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                          <textarea value={editingRequirement.description} onChange={(e) => setEditingRequirement((value) => ({ ...value, description: e.target.value }))} maxLength={2000} rows={3} placeholder="Describe the requirement and expected behavior." className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <select value={editingRequirement.priority} onChange={(e) => setEditingRequirement((value) => ({ ...value, priority: e.target.value as ProjectRequirementPriority }))} className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm">
+                              <option value="low">Low priority</option><option value="medium">Medium priority</option><option value="high">High priority</option><option value="critical">Critical priority</option>
+                            </select>
+                            <button disabled={savingRequirementEdit || !editingRequirement.title.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingRequirementEdit(true); setError(null);
+                              try {
+                                await updateProjectRequirement({ projectId: project.id, requirementId: requirement.id, ownerId: user.uid, ...editingRequirement });
+                                setRequirements((items) => items.map((item) => item.id === requirement.id ? { ...item, title: editingRequirement.title.trim(), description: editingRequirement.description.trim() || undefined, priority: editingRequirement.priority } : item));
+                                setEditingRequirementId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Requirement could not be saved."); }
+                              finally { setSavingRequirementEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50">{savingRequirementEdit ? "Saving..." : "Save changes"}</button>
+                          </div>
                         </div>
-                        <select value={requirement.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as "todo" | "in-progress" | "done";
-                          try {
-                            await updateProjectRequirementStatus({ projectId: project.id, requirementId: requirement.id, ownerId: user.uid, status });
-                            setRequirements((items) => items.map((item) => item.id === requirement.id ? { ...item, status } : item));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Requirement status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="todo">To do</option><option value="in-progress">In progress</option><option value="done">Done</option>
-                        </select>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-semibold">{requirement.title}</h3>
+                              <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{requirement.priority}</span>
+                            </div>
+                            {requirement.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{requirement.description}</p>}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={requirement.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as "todo" | "in-progress" | "done";
+                              try {
+                                await updateProjectRequirementStatus({ projectId: project.id, requirementId: requirement.id, ownerId: user.uid, status });
+                                setRequirements((items) => items.map((item) => item.id === requirement.id ? { ...item, status } : item));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Requirement status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="todo">To do</option><option value="in-progress">In progress</option><option value="done">Done</option>
+                            </select>
+                            <button onClick={() => { setEditingRequirementId(requirement.id); setEditingRequirement({ title: requirement.title, description: requirement.description ?? "", priority: requirement.priority }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button disabled={deletingRequirementId === requirement.id} onClick={async () => {
+                              if (!user || !project || !window.confirm(`Delete requirement "${requirement.title}"? This cannot be undone.`)) return;
+                              setDeletingRequirementId(requirement.id); setError(null);
+                              try {
+                                await deleteProjectRequirement({ projectId: project.id, requirementId: requirement.id, ownerId: user.uid });
+                                setRequirements((items) => items.filter((item) => item.id !== requirement.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Requirement could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:border-red-600 hover:text-red-200 disabled:opacity-50">{deletingRequirementId === requirement.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
