@@ -510,6 +510,9 @@ describe("Project security rules", () => {
     await assertSucceeds(updateDoc(doc(db(userA), "projects", projectA), {
       name: "Renamed project", description: "Updated project description", updatedAt: new Date(),
     }));
+    await assertSucceeds(updateDoc(doc(db(userA), "projects", projectA), {
+      description: "", updatedAt: new Date(),
+    }));
     await assertFails(updateDoc(doc(db(userA), "projects", projectA), {
       ownerId: userB.uid, updatedAt: new Date(),
     }));
