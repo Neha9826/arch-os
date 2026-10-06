@@ -232,10 +232,16 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.projectId == resource.data.projectId
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.title == resource.data.title
-        && request.resource.data.decision == resource.data.decision
-        && request.resource.data.rationale == resource.data.rationale
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200
+        && request.resource.data.decision is string
+        && request.resource.data.decision.size() > 0
+        && request.resource.data.decision.size() <= 5000
+        && request.resource.data.rationale is string
+        && request.resource.data.rationale.size() <= 5000
         && request.resource.data.status in ["proposed", "accepted", "superseded"]
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["title", "decision", "rationale", "status", "updatedAt"])
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner() && resource.data.ownerId == request.auth.uid
