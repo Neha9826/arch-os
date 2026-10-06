@@ -73,6 +73,8 @@ export default function ProjectExecutionPage() {
     overdue: tasks.filter((task) => task.status !== "done" && Boolean(task.dueDate) && task.dueDate! < todayKey).length,
   }), [tasks, todayKey]);
 
+  const completionRate = summary.total === 0 ? 0 : Math.round((summary.done / summary.total) * 100);
+
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
     const priorityRank: Record<ProjectExecutionTaskPriority, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -196,6 +198,26 @@ export default function ProjectExecutionPage() {
             <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-5">{[["Total", summary.total], ["Active", summary.active], ["Blocked", summary.blocked], ["Overdue", summary.overdue], ["Done", summary.done]].map(([label, value]) => <div key={label} className={`rounded-xl border px-3 py-2 ${label === "Overdue" && Number(value) > 0 ? "border-red-900/70 bg-red-950/30" : "border-slate-800 bg-slate-900"}`}><div className={`text-lg font-semibold ${label === "Overdue" && Number(value) > 0 ? "text-red-300" : ""}`}>{value}</div><div className="text-slate-500">{label}</div></div>)}</div>
           </div>
         </header>
+        <section aria-label="Execution progress" className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-200">Project execution progress</h2>
+              <p className="mt-1 text-xs text-slate-500">{summary.done} of {summary.total} tasks completed</p>
+            </div>
+            <span className="text-xl font-semibold tabular-nums text-slate-100">{completionRate}%</span>
+          </div>
+          <div
+            role="progressbar"
+            aria-label="Task completion"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={completionRate}
+            className="h-2.5 overflow-hidden rounded-full bg-slate-800"
+          >
+            <div className="h-full rounded-full bg-blue-500 transition-[width] duration-300" style={{ width: `${completionRate}%` }} />
+          </div>
+          {summary.total === 0 ? <p className="mt-3 text-xs text-slate-500">Create your first execution task to start tracking progress.</p> : null}
+        </section>
         <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
           <h2 className="font-semibold">Create execution task</h2>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
