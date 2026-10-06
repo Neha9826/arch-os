@@ -182,7 +182,7 @@ export default function ProjectExecutionPage() {
     const escapeCsv = (value: string | undefined) => {
       const normalized = value ?? "";
       // Prevent spreadsheet applications from evaluating user-controlled cells as formulas.
-      const safeValue = /^[\\t\\r ]*[=+\\-@]/.test(normalized) ? `'${normalized}` : normalized;
+      const safeValue = /^[\t\r ]*[=+@-]/.test(normalized) ? `'${normalized}` : normalized;
       return `"${safeValue.replace(/"/g, '""')}"`;
     };
     const rows = filteredTasks.map((task) => [
