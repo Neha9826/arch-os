@@ -306,6 +306,29 @@ describe("Project security rules", () => {
     );
   });
 
+  test("owner can edit database entity details without changing ownership", async () => {
+    await seedWorkspace(workspaceA, userA.uid);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await setDoc(doc(firestore, "projects", projectA), projectData);
+      await setDoc(doc(firestore, "projects", projectA, "databaseEntities", "entity-a"), {
+        projectId: projectA, ownerId: userA.uid, name: "users", purpose: "User records", status: "draft",
+      });
+    });
+    await assertSucceeds(updateDoc(doc(db(userA), "projects", projectA, "databaseEntities", "entity-a"), {
+      name: "accounts", purpose: "Account records", updatedAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(db(userA), "projects", projectA, "databaseEntities", "entity-a"), {
+      name: "invalid-name", updatedAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(db(userA), "projects", projectA, "databaseEntities", "entity-a"), {
+      ownerId: userB.uid, updatedAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(db(userB), "projects", projectA, "databaseEntities", "entity-a"), {
+      name: "stolen", updatedAt: new Date(),
+    }));
+  });
+
   test("owner can edit API contract details without changing ownership", async () => {
     await seedWorkspace(workspaceA, userA.uid);
     await testEnv.withSecurityRulesDisabled(async (context) => {
