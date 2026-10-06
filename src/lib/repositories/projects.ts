@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   deleteDoc,
+  deleteField,
   getDoc,
   getDocs,
   query,
@@ -500,7 +501,7 @@ export async function updateProjectMilestone(input: {
   await updateDoc(milestoneRef, {
     title: milestone.title,
     description: milestone.description ?? "",
-    targetDate: milestone.targetDate ?? "",
+    ...(milestone.targetDate ? { targetDate: milestone.targetDate } : { targetDate: deleteField() }),
     updatedAt: serverTimestamp(),
   });
 }
