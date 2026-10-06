@@ -239,6 +239,61 @@ describe("Project security rules", () => {
     );
   });
 
+  test("owner can edit a requirement without changing its ownership", async () => {
+    await seedWorkspace(workspaceA, userA.uid);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await setDoc(doc(firestore, "projects", projectA), projectData);
+      await setDoc(
+        doc(firestore, "projects", projectA, "requirements", "requirement-a"),
+        {
+          projectId: projectA,
+          ownerId: userA.uid,
+          title: "Original requirement",
+          priority: "medium",
+          status: "todo",
+        },
+      );
+    });
+
+    await assertSucceeds(
+      updateDoc(
+        doc(db(userA), "projects", projectA, "requirements", "requirement-a"),
+        {
+          title: "Updated requirement",
+          description: "Clarified acceptance criteria",
+          priority: "critical",
+          updatedAt: new Date(),
+        },
+      ),
+    );
+  });
+
+  test("another user cannot edit a requirement", async () => {
+    await seedWorkspace(workspaceA, userA.uid);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await setDoc(doc(firestore, "projects", projectA), projectData);
+      await setDoc(
+        doc(firestore, "projects", projectA, "requirements", "requirement-a"),
+        {
+          projectId: projectA,
+          ownerId: userA.uid,
+          title: "Original requirement",
+          priority: "medium",
+          status: "todo",
+        },
+      );
+    });
+
+    await assertFails(
+      updateDoc(
+        doc(db(userB), "projects", projectA, "requirements", "requirement-a"),
+        { title: "Unauthorized edit", updatedAt: new Date() },
+      ),
+    );
+  });
+
   test("unauthenticated users cannot read or create projects", async () => {
     await seedWorkspace(workspaceA, userA.uid);
 
