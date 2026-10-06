@@ -181,7 +181,9 @@ export default function ProjectExecutionPage() {
     const headers = ["Title", "Description", "Status", "Priority", "Section", "Source ID", "Due Date"];
     const escapeCsv = (value: string | undefined) => {
       const normalized = value ?? "";
-      return `"${normalized.replace(/"/g, '""')}"`;
+      // Prevent spreadsheet applications from evaluating user-controlled cells as formulas.
+      const safeValue = /^[\\t\\r ]*[=+\\-@]/.test(normalized) ? `'${normalized}` : normalized;
+      return `"${safeValue.replace(/"/g, '""')}"`;
     };
     const rows = filteredTasks.map((task) => [
       task.title,
@@ -197,7 +199,8 @@ export default function ProjectExecutionPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${(projectName || "project").trim().replace(/[^a-z0-9-_]+/gi, "-")}-execution-tasks.csv`;
+    const projectSlug = (projectName || "project").trim().replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "") || "project";
+    link.download = `${projectSlug}-execution-tasks.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
