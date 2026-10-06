@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, updateProjectApiContract, createProjectCodeArtifact, updateProjectCodeArtifact, createProjectTestCase, updateProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, updateProjectDatabaseEntity, createProjectDesignDecision, updateProjectDesignDecision, createProjectInfrastructureResource, updateProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, updateProjectApiContract, createProjectCodeArtifact, updateProjectCodeArtifact, createProjectTestCase, updateProjectTestCase, createProjectDocumentation, updateProjectDocumentation, createProjectDatabaseEntity, updateProjectDatabaseEntity, createProjectDesignDecision, updateProjectDesignDecision, createProjectInfrastructureResource, updateProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
 import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectTestCase, type ProjectTestStatus, type ProjectTestType, type ProjectDocumentationEntry, type ProjectDocumentationStatus, type ProjectDocumentationType, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
@@ -94,6 +94,9 @@ export default function ProjectSectionPage() {
   const [documentation, setDocumentation] = useState<ProjectDocumentationEntry[]>([]);
   const [newDocumentation, setNewDocumentation] = useState({ title: "", type: "readme" as ProjectDocumentationType, path: "", summary: "" });
   const [savingDocumentation, setSavingDocumentation] = useState(false);
+  const [editingDocumentationId, setEditingDocumentationId] = useState<string | null>(null);
+  const [editingDocumentation, setEditingDocumentation] = useState({ title: "", type: "readme" as ProjectDocumentationType, path: "", summary: "" });
+  const [savingDocumentationEdit, setSavingDocumentationEdit] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -284,35 +287,60 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No documentation entries defined yet.</div>
                   ) : documentation.map((item) => (
                     <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-semibold">{item.title}</h3>
-                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{item.type}</span>
+                      {editingDocumentationId === item.id ? (
+                        <div className="space-y-3">
+                          <input value={editingDocumentation.title} onChange={(e) => setEditingDocumentation((v) => ({ ...v, title: e.target.value }))} maxLength={200} aria-label="Document title" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <select value={editingDocumentation.type} onChange={(e) => setEditingDocumentation((v) => ({ ...v, type: e.target.value as ProjectDocumentationType }))} aria-label="Document type" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm"><option value="readme">README</option><option value="api">API</option><option value="architecture">Architecture</option><option value="runbook">Runbook</option><option value="decision">Decision</option><option value="guide">Guide</option><option value="other">Other</option></select>
+                          <input value={editingDocumentation.path} onChange={(e) => setEditingDocumentation((v) => ({ ...v, path: e.target.value }))} maxLength={500} aria-label="Document path" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <textarea value={editingDocumentation.summary} onChange={(e) => setEditingDocumentation((v) => ({ ...v, summary: e.target.value }))} maxLength={2000} rows={3} aria-label="Document summary" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={savingDocumentationEdit || !editingDocumentation.title.trim() || !editingDocumentation.path.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingDocumentationEdit(true); setError(null);
+                              try {
+                                await updateProjectDocumentation({ projectId: project.id, documentationId: item.id, ownerId: user.uid, ...editingDocumentation });
+                                setDocumentation((items) => items.map((current) => current.id === item.id ? { ...current, ...editingDocumentation, title: editingDocumentation.title.trim(), path: editingDocumentation.path.trim(), summary: editingDocumentation.summary.trim() } : current));
+                                setEditingDocumentationId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Documentation entry could not be saved."); }
+                              finally { setSavingDocumentationEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingDocumentationEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingDocumentationId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
                           </div>
-                          <p className="mt-2 font-mono text-xs text-slate-500">{item.path}</p>
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{item.summary || "No summary documented."}</p>
                         </div>
-                        <select value={item.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectDocumentationStatus;
-                          try {
-                            await updateProjectDocumentationStatus({ projectId: project.id, documentationId: item.id, ownerId: user.uid, status });
-                            setDocumentation((items) => items.map((current) => current.id === item.id ? { ...current, status } : current));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Documentation status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="planned">Planned</option><option value="draft">Draft</option><option value="published">Published</option><option value="deprecated">Deprecated</option>
-                        </select>
-                        <button type="button" disabled={deletingRequirementId === item.id} onClick={async () => {
-                          if (!user || !project || !window.confirm("Delete this document? This cannot be undone.")) return;
-                          setDeletingRequirementId(item.id); setError(null);
-                          try {
-                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: item.id, ownerId: user.uid, collectionName: "documentation" });
-                            setDocumentation((items) => items.filter((current) => current.id !== item.id));
-                          } catch (err) { setError(err instanceof Error ? err.message : "The document could not be deleted."); }
-                          finally { setDeletingRequirementId(null); }
-                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === item.id ? "Deleting..." : "Delete"}</button>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-semibold">{item.title}</h3>
+                              <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{item.type}</span>
+                            </div>
+                            <p className="mt-2 font-mono text-xs text-slate-500">{item.path}</p>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{item.summary || "No summary documented."}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={item.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectDocumentationStatus;
+                              try {
+                                await updateProjectDocumentationStatus({ projectId: project.id, documentationId: item.id, ownerId: user.uid, status });
+                                setDocumentation((items) => items.map((current) => current.id === item.id ? { ...current, status } : current));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Documentation status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="planned">Planned</option><option value="draft">Draft</option><option value="published">Published</option><option value="deprecated">Deprecated</option>
+                            </select>
+                            <button onClick={() => { setEditingDocumentationId(item.id); setEditingDocumentation({ title: item.title, type: item.type, path: item.path, summary: item.summary }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === item.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this document? This cannot be undone.")) return;
+                              setDeletingRequirementId(item.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: item.id, ownerId: user.uid, collectionName: "documentation" });
+                                setDocumentation((items) => items.filter((current) => current.id !== item.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The document could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === item.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
