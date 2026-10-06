@@ -474,6 +474,37 @@ export async function createProjectMilestone(input: {
   return milestoneRef.id;
 }
 
+export async function updateProjectMilestone(input: {
+  projectId: string;
+  milestoneId: string;
+  ownerId: string;
+  title: string;
+  description?: string;
+  targetDate?: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const milestoneRef = doc(projectRef, PROJECT_ROADMAP_SUBCOLLECTION, input.milestoneId);
+  const snapshot = await getDoc(milestoneRef);
+  if (!snapshot.exists()) throw new Error("Milestone not found.");
+  const existing = toProjectMilestone(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this milestone.");
+  }
+  const milestone: ProjectMilestone = {
+    ...existing,
+    title: input.title.trim(),
+    description: input.description?.trim() || undefined,
+    targetDate: input.targetDate || undefined,
+  };
+  if (!isValidProjectMilestone(milestone)) throw new Error("Invalid project milestone.");
+  await updateDoc(milestoneRef, {
+    title: milestone.title,
+    description: milestone.description ?? "",
+    targetDate: milestone.targetDate ?? "",
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function updateProjectMilestoneStatus(input: {
   projectId: string;
   milestoneId: string;
