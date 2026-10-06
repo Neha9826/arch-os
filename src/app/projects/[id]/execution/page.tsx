@@ -158,6 +158,33 @@ export default function ProjectExecutionPage() {
   if (loading || fetching) return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-400">Loading execution workspace...</div>;
   if (!user) return null;
 
+  const exportTasksCsv = () => {
+    const headers = ["Title", "Description", "Status", "Priority", "Section", "Source ID", "Due Date"];
+    const escapeCsv = (value: string | undefined) => {
+      const normalized = value ?? "";
+      return `"${normalized.replace(/"/g, '""')}"`;
+    };
+    const rows = filteredTasks.map((task) => [
+      task.title,
+      task.description,
+      STATUS_META[task.status],
+      task.priority,
+      task.section ? SECTION_LABELS[task.section] : "",
+      task.sourceId,
+      task.dueDate,
+    ].map(escapeCsv).join(","));
+    const csv = [headers.map(escapeCsv).join(","), ...rows].join("\r\n");
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${(projectName || "project").trim().replace(/[^a-z0-9-_]+/gi, "-")}-execution-tasks.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-8 text-slate-100">
       <div className="mx-auto max-w-6xl">
@@ -194,6 +221,7 @@ export default function ProjectExecutionPage() {
                 />
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={exportTasksCsv} disabled={filteredTasks.length === 0} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Export CSV ({filteredTasks.length})</button>
                 <div className="flex items-center gap-1 text-slate-600"><Filter size={14} /></div>
                 <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
                   <option value="all">All statuses</option>
