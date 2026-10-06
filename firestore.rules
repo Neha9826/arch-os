@@ -264,10 +264,13 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.projectId == resource.data.projectId
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.title == resource.data.title
-        && request.resource.data.description == resource.data.description
-        && request.resource.data.targetDate == resource.data.targetDate
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200
+        && (!request.resource.data.keys().hasAll(["description"]) || (request.resource.data.description is string && request.resource.data.description.size() <= 2000))
+        && (!request.resource.data.keys().hasAll(["targetDate"]) || (request.resource.data.targetDate is string && request.resource.data.targetDate.matches("^\\d{4}-\\d{2}-\\d{2}$")))
         && request.resource.data.status in ["planned", "in-progress", "done"]
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["title", "description", "targetDate", "status", "updatedAt"])
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner() && resource.data.ownerId == request.auth.uid
