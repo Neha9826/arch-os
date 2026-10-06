@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, updateProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, updateProjectDatabaseEntity, createProjectDesignDecision, updateProjectDesignDecision, createProjectInfrastructureResource, updateProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, updateProjectApiContract, createProjectCodeArtifact, updateProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, updateProjectDatabaseEntity, createProjectDesignDecision, updateProjectDesignDecision, createProjectInfrastructureResource, updateProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
 import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectTestCase, type ProjectTestStatus, type ProjectTestType, type ProjectDocumentationEntry, type ProjectDocumentationStatus, type ProjectDocumentationType, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
@@ -82,6 +82,9 @@ export default function ProjectSectionPage() {
   const [codeArtifacts, setCodeArtifacts] = useState<ProjectCodeArtifact[]>([]);
   const [newCodeArtifact, setNewCodeArtifact] = useState({ name: "", language: "", runtime: "", path: "", purpose: "" });
   const [savingCodeArtifact, setSavingCodeArtifact] = useState(false);
+  const [editingCodeArtifactId, setEditingCodeArtifactId] = useState<string | null>(null);
+  const [editingCodeArtifact, setEditingCodeArtifact] = useState({ name: "", language: "", runtime: "", path: "", purpose: "" });
+  const [savingCodeArtifactEdit, setSavingCodeArtifactEdit] = useState(false);
   const [testCases, setTestCases] = useState<ProjectTestCase[]>([]);
   const [newTestCase, setNewTestCase] = useState({ name: "", type: "unit" as ProjectTestType, path: "", purpose: "" });
   const [savingTestCase, setSavingTestCase] = useState(false);
@@ -405,36 +408,64 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No code artifacts defined yet.</div>
                   ) : codeArtifacts.map((artifact) => (
                     <div key={artifact.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-semibold">{artifact.name}</h3>
-                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{artifact.language}</span>
-                            {artifact.runtime && <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] text-slate-500">{artifact.runtime}</span>}
+                      {editingCodeArtifactId === artifact.id ? (
+                        <div className="space-y-3">
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <input value={editingCodeArtifact.name} onChange={(e) => setEditingCodeArtifact((v) => ({ ...v, name: e.target.value }))} maxLength={160} aria-label="Artifact name" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                            <input value={editingCodeArtifact.language} onChange={(e) => setEditingCodeArtifact((v) => ({ ...v, language: e.target.value }))} maxLength={100} aria-label="Artifact language" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                            <input value={editingCodeArtifact.runtime} onChange={(e) => setEditingCodeArtifact((v) => ({ ...v, runtime: e.target.value }))} maxLength={100} aria-label="Artifact runtime" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                            <input value={editingCodeArtifact.path} onChange={(e) => setEditingCodeArtifact((v) => ({ ...v, path: e.target.value }))} maxLength={500} aria-label="Artifact repository path" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                            <textarea value={editingCodeArtifact.purpose} onChange={(e) => setEditingCodeArtifact((v) => ({ ...v, purpose: e.target.value }))} maxLength={2000} rows={3} aria-label="Artifact purpose" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm md:col-span-2" />
                           </div>
-                          <p className="mt-2 font-mono text-xs text-slate-500">{artifact.path}</p>
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{artifact.purpose || "No purpose documented."}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={savingCodeArtifactEdit || !editingCodeArtifact.name.trim() || !editingCodeArtifact.language.trim() || !editingCodeArtifact.path.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingCodeArtifactEdit(true); setError(null);
+                              try {
+                                await updateProjectCodeArtifact({ projectId: project.id, artifactId: artifact.id, ownerId: user.uid, ...editingCodeArtifact });
+                                setCodeArtifacts((items) => items.map((current) => current.id === artifact.id ? { ...current, ...editingCodeArtifact, name: editingCodeArtifact.name.trim(), language: editingCodeArtifact.language.trim(), runtime: editingCodeArtifact.runtime.trim(), path: editingCodeArtifact.path.trim(), purpose: editingCodeArtifact.purpose.trim() } : current));
+                                setEditingCodeArtifactId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Code artifact could not be saved."); }
+                              finally { setSavingCodeArtifactEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingCodeArtifactEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingCodeArtifactId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
+                          </div>
                         </div>
-                        <select value={artifact.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectCodeArtifactStatus;
-                          try {
-                            await updateProjectCodeArtifactStatus({ projectId: project.id, artifactId: artifact.id, ownerId: user.uid, status });
-                            setCodeArtifacts((items) => items.map((item) => item.id === artifact.id ? { ...item, status } : item));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Code artifact status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="planned">Planned</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
-                        </select>
-                        <button type="button" disabled={deletingRequirementId === artifact.id} onClick={async () => {
-                          if (!user || !project || !window.confirm("Delete this code artifact? This cannot be undone.")) return;
-                          setDeletingRequirementId(artifact.id); setError(null);
-                          try {
-                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: artifact.id, ownerId: user.uid, collectionName: "codeArtifacts" });
-                            setCodeArtifacts((items) => items.filter((current) => current.id !== artifact.id));
-                          } catch (err) { setError(err instanceof Error ? err.message : "The code artifact could not be deleted."); }
-                          finally { setDeletingRequirementId(null); }
-                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === artifact.id ? "Deleting..." : "Delete"}</button>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-semibold">{artifact.name}</h3>
+                              <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{artifact.language}</span>
+                              {artifact.runtime && <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] text-slate-500">{artifact.runtime}</span>}
+                            </div>
+                            <p className="mt-2 font-mono text-xs text-slate-500">{artifact.path}</p>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{artifact.purpose || "No purpose documented."}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={artifact.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectCodeArtifactStatus;
+                              try {
+                                await updateProjectCodeArtifactStatus({ projectId: project.id, artifactId: artifact.id, ownerId: user.uid, status });
+                                setCodeArtifacts((items) => items.map((item) => item.id === artifact.id ? { ...item, status } : item));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Code artifact status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="planned">Planned</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
+                            </select>
+                            <button onClick={() => { setEditingCodeArtifactId(artifact.id); setEditingCodeArtifact({ name: artifact.name, language: artifact.language, runtime: artifact.runtime, path: artifact.path, purpose: artifact.purpose }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === artifact.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this code artifact? This cannot be undone.")) return;
+                              setDeletingRequirementId(artifact.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: artifact.id, ownerId: user.uid, collectionName: "codeArtifacts" });
+                                setCodeArtifacts((items) => items.filter((current) => current.id !== artifact.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The code artifact could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === artifact.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
