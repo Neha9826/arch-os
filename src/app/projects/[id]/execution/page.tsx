@@ -30,6 +30,7 @@ export default function ProjectExecutionPage() {
   const [priorityFilter, setPriorityFilter] = useState<"all" | ProjectExecutionTaskPriority>("all");
   const [sectionFilter, setSectionFilter] = useState<ProjectSectionKey | "all">("all");
   const [sortBy, setSortBy] = useState<"dueDate" | "priority" | "title">("dueDate");
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newTask, setNewTask] = useState<{ title: string; description: string; priority: ProjectExecutionTaskPriority; section: ProjectSectionKey | ""; sourceId: string; dueDate: string }>({
     title: "", description: "", priority: "medium", section: "", sourceId: "", dueDate: "",
@@ -70,7 +71,7 @@ export default function ProjectExecutionPage() {
     total: tasks.length, active: tasks.filter((task) => task.status !== "done").length,
     blocked: tasks.filter((task) => task.status === "blocked").length, done: tasks.filter((task) => task.status === "done").length,
     overdue: tasks.filter((task) => task.status !== "done" && Boolean(task.dueDate) && task.dueDate! < todayKey).length,
-  }), [tasks]);
+  }), [tasks, todayKey]);
 
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -80,7 +81,8 @@ export default function ProjectExecutionPage() {
       const matchesStatus = statusFilter === "all" || task.status === statusFilter;
       const matchesPriority = priorityFilter === "all" || task.priority === priorityFilter;
       const matchesSection = sectionFilter === "all" || task.section === sectionFilter;
-      return matchesSearch && matchesStatus && matchesPriority && matchesSection;
+      const matchesOverdue = !overdueOnly || (task.status !== "done" && Boolean(task.dueDate) && task.dueDate! < todayKey);
+      return matchesSearch && matchesStatus && matchesPriority && matchesSection && matchesOverdue;
     }).sort((a, b) => {
       if (sortBy === "priority") return priorityRank[a.priority] - priorityRank[b.priority] || a.title.localeCompare(b.title);
       if (sortBy === "title") return a.title.localeCompare(b.title);
@@ -88,7 +90,7 @@ export default function ProjectExecutionPage() {
       const bDue = b.dueDate || "9999-12-31";
       return aDue.localeCompare(bDue) || (a.status === "done" ? 1 : 0) - (b.status === "done" ? 1 : 0) || a.title.localeCompare(b.title);
     });
-  }, [tasks, search, statusFilter, priorityFilter, sectionFilter, sortBy, todayKey]);
+  }, [tasks, search, statusFilter, priorityFilter, sectionFilter, sortBy, overdueOnly, todayKey]);
 
   const addTask = async () => {
     if (!user || !newTask.title.trim() || saving) return;
@@ -208,12 +210,15 @@ export default function ProjectExecutionPage() {
                 <select aria-label="Sort tasks" value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
                   <option value="dueDate">Sort: due date</option><option value="priority">Sort: priority</option><option value="title">Sort: title</option>
                 </select>
+                <button type="button" aria-pressed={overdueOnly} onClick={() => setOverdueOnly((value) => !value)} className={`rounded-lg border px-3 py-2 text-xs ${overdueOnly ? "border-red-800 bg-red-950/40 text-red-200" : "border-slate-700 text-slate-300 hover:border-red-900"}`}>
+                  {overdueOnly ? "Showing overdue" : "Overdue only"}
+                </button>
               </div>
             </div>
-            {(search || statusFilter !== "all" || priorityFilter !== "all" || sectionFilter !== "all") ? (
+            {(search || statusFilter !== "all" || priorityFilter !== "all" || sectionFilter !== "all" || overdueOnly) ? (
               <div className="mt-3 flex items-center justify-between text-[11px] text-slate-600">
                 <span>Showing {filteredTasks.length} of {tasks.length} tasks</span>
-                <button onClick={() => { setSearch(""); setStatusFilter("all"); setPriorityFilter("all"); setSectionFilter("all"); }} className="text-blue-400 hover:text-blue-300">Clear filters</button>
+                <button onClick={() => { setSearch(""); setStatusFilter("all"); setPriorityFilter("all"); setSectionFilter("all"); setOverdueOnly(false); }} className="text-blue-400 hover:text-blue-300">Clear filters</button>
               </div>
             ) : null}
           </div>
