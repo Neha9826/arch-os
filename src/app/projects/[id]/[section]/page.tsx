@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
 import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectTestCase, type ProjectTestStatus, type ProjectTestType, type ProjectDocumentationEntry, type ProjectDocumentationStatus, type ProjectDocumentationType, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
@@ -282,6 +282,15 @@ export default function ProjectSectionPage() {
                         }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
                           <option value="planned">Planned</option><option value="draft">Draft</option><option value="published">Published</option><option value="deprecated">Deprecated</option>
                         </select>
+                        <button type="button" disabled={deletingRequirementId === item.id} onClick={async () => {
+                          if (!user || !project || !window.confirm("Delete this document? This cannot be undone.")) return;
+                          setDeletingRequirementId(item.id); setError(null);
+                          try {
+                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: item.id, ownerId: user.uid, collectionName: "documentation" });
+                            setDocumentation((items) => items.filter((current) => current.id !== item.id));
+                          } catch (err) { setError(err instanceof Error ? err.message : "The document could not be deleted."); }
+                          finally { setDeletingRequirementId(null); }
+                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === item.id ? "Deleting..." : "Delete"}</button>
                       </div>
                     </div>
                   ))}
@@ -337,6 +346,15 @@ export default function ProjectSectionPage() {
                         }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
                           <option value="planned">Planned</option><option value="passing">Passing</option><option value="failing">Failing</option><option value="skipped">Skipped</option>
                         </select>
+                        <button type="button" disabled={deletingRequirementId === testCase.id} onClick={async () => {
+                          if (!user || !project || !window.confirm("Delete this test case? This cannot be undone.")) return;
+                          setDeletingRequirementId(testCase.id); setError(null);
+                          try {
+                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: testCase.id, ownerId: user.uid, collectionName: "testCases" });
+                            setTestCases((items) => items.filter((current) => current.id !== testCase.id));
+                          } catch (err) { setError(err instanceof Error ? err.message : "The test case could not be deleted."); }
+                          finally { setDeletingRequirementId(null); }
+                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === testCase.id ? "Deleting..." : "Delete"}</button>
                       </div>
                     </div>
                   ))}
@@ -392,6 +410,15 @@ export default function ProjectSectionPage() {
                         }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
                           <option value="planned">Planned</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
                         </select>
+                        <button type="button" disabled={deletingRequirementId === artifact.id} onClick={async () => {
+                          if (!user || !project || !window.confirm("Delete this code artifact? This cannot be undone.")) return;
+                          setDeletingRequirementId(artifact.id); setError(null);
+                          try {
+                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: artifact.id, ownerId: user.uid, collectionName: "codeArtifacts" });
+                            setCodeArtifacts((items) => items.filter((current) => current.id !== artifact.id));
+                          } catch (err) { setError(err instanceof Error ? err.message : "The code artifact could not be deleted."); }
+                          finally { setDeletingRequirementId(null); }
+                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === artifact.id ? "Deleting..." : "Delete"}</button>
                       </div>
                     </div>
                   ))}
@@ -446,6 +473,15 @@ export default function ProjectSectionPage() {
                         }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
                           <option value="planned">Planned</option><option value="active">Active</option><option value="retired">Retired</option>
                         </select>
+                        <button type="button" disabled={deletingRequirementId === resource.id} onClick={async () => {
+                          if (!user || !project || !window.confirm("Delete this infrastructure resource? This cannot be undone.")) return;
+                          setDeletingRequirementId(resource.id); setError(null);
+                          try {
+                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: resource.id, ownerId: user.uid, collectionName: "infrastructureResources" });
+                            setInfrastructureResources((items) => items.filter((current) => current.id !== resource.id));
+                          } catch (err) { setError(err instanceof Error ? err.message : "The infrastructure resource could not be deleted."); }
+                          finally { setDeletingRequirementId(null); }
+                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === resource.id ? "Deleting..." : "Delete"}</button>
                       </div>
                     </div>
                   ))}
@@ -492,6 +528,15 @@ export default function ProjectSectionPage() {
                         }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
                           <option value="draft">Draft</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
                         </select>
+                        <button type="button" disabled={deletingRequirementId === entity.id} onClick={async () => {
+                          if (!user || !project || !window.confirm("Delete this database entity? This cannot be undone.")) return;
+                          setDeletingRequirementId(entity.id); setError(null);
+                          try {
+                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: entity.id, ownerId: user.uid, collectionName: "databaseEntities" });
+                            setDatabaseEntities((items) => items.filter((current) => current.id !== entity.id));
+                          } catch (err) { setError(err instanceof Error ? err.message : "The database entity could not be deleted."); }
+                          finally { setDeletingRequirementId(null); }
+                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === entity.id ? "Deleting..." : "Delete"}</button>
                       </div>
                     </div>
                   ))}
@@ -549,6 +594,15 @@ export default function ProjectSectionPage() {
                         }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
                           <option value="draft">Draft</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
                         </select>
+                        <button type="button" disabled={deletingRequirementId === contract.id} onClick={async () => {
+                          if (!user || !project || !window.confirm("Delete this API contract? This cannot be undone.")) return;
+                          setDeletingRequirementId(contract.id); setError(null);
+                          try {
+                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: contract.id, ownerId: user.uid, collectionName: "apiContracts" });
+                            setApiContracts((items) => items.filter((current) => current.id !== contract.id));
+                          } catch (err) { setError(err instanceof Error ? err.message : "The API contract could not be deleted."); }
+                          finally { setDeletingRequirementId(null); }
+                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === contract.id ? "Deleting..." : "Delete"}</button>
                       </div>
                     </div>
                   ))}
@@ -597,6 +651,15 @@ export default function ProjectSectionPage() {
                         }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
                           <option value="proposed">Proposed</option><option value="accepted">Accepted</option><option value="superseded">Superseded</option>
                         </select>
+                        <button type="button" disabled={deletingRequirementId === item.id} onClick={async () => {
+                          if (!user || !project || !window.confirm("Delete this design decision? This cannot be undone.")) return;
+                          setDeletingRequirementId(item.id); setError(null);
+                          try {
+                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: item.id, ownerId: user.uid, collectionName: "designDecisions" });
+                            setDesignDecisions((items) => items.filter((current) => current.id !== item.id));
+                          } catch (err) { setError(err instanceof Error ? err.message : "The design decision could not be deleted."); }
+                          finally { setDeletingRequirementId(null); }
+                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === item.id ? "Deleting..." : "Delete"}</button>
                       </div>
                     </div>
                   ))}
@@ -645,6 +708,15 @@ export default function ProjectSectionPage() {
                         }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
                           <option value="planned">Planned</option><option value="in-progress">In progress</option><option value="done">Done</option>
                         </select>
+                        <button type="button" disabled={deletingRequirementId === milestone.id} onClick={async () => {
+                          if (!user || !project || !window.confirm("Delete this milestone? This cannot be undone.")) return;
+                          setDeletingRequirementId(milestone.id); setError(null);
+                          try {
+                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: milestone.id, ownerId: user.uid, collectionName: "roadmap" });
+                            setMilestones((items) => items.filter((current) => current.id !== milestone.id));
+                          } catch (err) { setError(err instanceof Error ? err.message : "The milestone could not be deleted."); }
+                          finally { setDeletingRequirementId(null); }
+                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === milestone.id ? "Deleting..." : "Delete"}</button>
                       </div>
                     </div>
                   ))}
