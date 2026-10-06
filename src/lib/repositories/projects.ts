@@ -577,6 +577,37 @@ export async function createProjectDesignDecision(input: {
   return decisionRef.id;
 }
 
+export async function updateProjectDesignDecision(input: {
+  projectId: string;
+  decisionId: string;
+  ownerId: string;
+  title: string;
+  decision: string;
+  rationale: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const decisionRef = doc(projectRef, PROJECT_DESIGN_SUBCOLLECTION, input.decisionId);
+  const snapshot = await getDoc(decisionRef);
+  if (!snapshot.exists()) throw new Error("Design decision not found.");
+  const existing = toProjectDesignDecision(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this design decision.");
+  }
+  const decision: ProjectDesignDecision = {
+    ...existing,
+    title: input.title.trim(),
+    decision: input.decision.trim(),
+    rationale: input.rationale.trim(),
+  };
+  if (!isValidProjectDesignDecision(decision)) throw new Error("Invalid project design decision.");
+  await updateDoc(decisionRef, {
+    title: decision.title,
+    decision: decision.decision,
+    rationale: decision.rationale,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function updateProjectDesignDecisionStatus(input: {
   projectId: string;
   decisionId: string;
