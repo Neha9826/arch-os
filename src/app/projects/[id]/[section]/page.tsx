@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, updateProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, updateProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, createProjectDesignDecision, updateProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
 import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectTestCase, type ProjectTestStatus, type ProjectTestType, type ProjectDocumentationEntry, type ProjectDocumentationStatus, type ProjectDocumentationType, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
@@ -58,6 +58,9 @@ export default function ProjectSectionPage() {
   const [designDecisions, setDesignDecisions] = useState<ProjectDesignDecision[]>([]);
   const [newDesignDecision, setNewDesignDecision] = useState({ title: "", decision: "", rationale: "" });
   const [savingDesignDecision, setSavingDesignDecision] = useState(false);
+  const [editingDesignDecisionId, setEditingDesignDecisionId] = useState<string | null>(null);
+  const [editingDesignDecision, setEditingDesignDecision] = useState({ title: "", decision: "", rationale: "" });
+  const [savingDesignDecisionEdit, setSavingDesignDecisionEdit] = useState(false);
   const [apiContracts, setApiContracts] = useState<ProjectApiContract[]>([]);
   const [newApiContract, setNewApiContract] = useState({ method: "GET" as ProjectApiMethod, path: "", title: "", description: "" });
   const [savingApiContract, setSavingApiContract] = useState(false);
@@ -668,32 +671,56 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No design decisions recorded yet.</div>
                   ) : designDecisions.map((item) => (
                     <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{item.title}</h3><span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{item.status}</span></div>
-                          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{item.decision}</p>
-                          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-500"><span className="text-slate-400">Rationale:</span> {item.rationale || "Not provided."}</p>
+                      {editingDesignDecisionId === item.id ? (
+                        <div className="space-y-3">
+                          <input value={editingDesignDecision.title} onChange={(e) => setEditingDesignDecision((v) => ({ ...v, title: e.target.value }))} maxLength={200} aria-label="Decision title" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <textarea value={editingDesignDecision.decision} onChange={(e) => setEditingDesignDecision((v) => ({ ...v, decision: e.target.value }))} maxLength={5000} rows={4} aria-label="Design decision" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <textarea value={editingDesignDecision.rationale} onChange={(e) => setEditingDesignDecision((v) => ({ ...v, rationale: e.target.value }))} maxLength={5000} rows={3} aria-label="Decision rationale" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={savingDesignDecisionEdit || !editingDesignDecision.title.trim() || !editingDesignDecision.decision.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingDesignDecisionEdit(true); setError(null);
+                              try {
+                                await updateProjectDesignDecision({ projectId: project.id, decisionId: item.id, ownerId: user.uid, ...editingDesignDecision });
+                                setDesignDecisions((items) => items.map((current) => current.id === item.id ? { ...current, ...editingDesignDecision, title: editingDesignDecision.title.trim(), decision: editingDesignDecision.decision.trim(), rationale: editingDesignDecision.rationale.trim() } : current));
+                                setEditingDesignDecisionId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Design decision could not be saved."); }
+                              finally { setSavingDesignDecisionEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingDesignDecisionEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingDesignDecisionId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
+                          </div>
                         </div>
-                        <select value={item.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectDesignDecisionStatus;
-                          try {
-                            await updateProjectDesignDecisionStatus({ projectId: project.id, decisionId: item.id, ownerId: user.uid, status });
-                            setDesignDecisions((items) => items.map((current) => current.id === item.id ? { ...current, status } : current));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Design decision status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="proposed">Proposed</option><option value="accepted">Accepted</option><option value="superseded">Superseded</option>
-                        </select>
-                        <button type="button" disabled={deletingRequirementId === item.id} onClick={async () => {
-                          if (!user || !project || !window.confirm("Delete this design decision? This cannot be undone.")) return;
-                          setDeletingRequirementId(item.id); setError(null);
-                          try {
-                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: item.id, ownerId: user.uid, collectionName: "designDecisions" });
-                            setDesignDecisions((items) => items.filter((current) => current.id !== item.id));
-                          } catch (err) { setError(err instanceof Error ? err.message : "The design decision could not be deleted."); }
-                          finally { setDeletingRequirementId(null); }
-                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === item.id ? "Deleting..." : "Delete"}</button>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{item.title}</h3><span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{item.status}</span></div>
+                            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{item.decision}</p>
+                            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-500"><span className="text-slate-400">Rationale:</span> {item.rationale || "Not provided."}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={item.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectDesignDecisionStatus;
+                              try {
+                                await updateProjectDesignDecisionStatus({ projectId: project.id, decisionId: item.id, ownerId: user.uid, status });
+                                setDesignDecisions((items) => items.map((current) => current.id === item.id ? { ...current, status } : current));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Design decision status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="proposed">Proposed</option><option value="accepted">Accepted</option><option value="superseded">Superseded</option>
+                            </select>
+                            <button onClick={() => { setEditingDesignDecisionId(item.id); setEditingDesignDecision({ title: item.title, decision: item.decision, rationale: item.rationale }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === item.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this design decision? This cannot be undone.")) return;
+                              setDeletingRequirementId(item.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: item.id, ownerId: user.uid, collectionName: "designDecisions" });
+                                setDesignDecisions((items) => items.filter((current) => current.id !== item.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The design decision could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === item.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
