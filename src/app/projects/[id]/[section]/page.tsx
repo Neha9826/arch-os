@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, updateProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, createProjectDesignDecision, updateProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, updateProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, updateProjectDatabaseEntity, createProjectDesignDecision, updateProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
 import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectTestCase, type ProjectTestStatus, type ProjectTestType, type ProjectDocumentationEntry, type ProjectDocumentationStatus, type ProjectDocumentationType, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
@@ -70,6 +70,9 @@ export default function ProjectSectionPage() {
   const [databaseEntities, setDatabaseEntities] = useState<ProjectDatabaseEntity[]>([]);
   const [newDatabaseEntity, setNewDatabaseEntity] = useState({ name: "", purpose: "" });
   const [savingDatabaseEntity, setSavingDatabaseEntity] = useState(false);
+  const [editingDatabaseEntityId, setEditingDatabaseEntityId] = useState<string | null>(null);
+  const [editingDatabaseEntity, setEditingDatabaseEntity] = useState({ name: "", purpose: "" });
+  const [savingDatabaseEntityEdit, setSavingDatabaseEntityEdit] = useState(false);
   const [infrastructureResources, setInfrastructureResources] = useState<ProjectInfrastructureResource[]>([]);
   const [newInfrastructureResource, setNewInfrastructureResource] = useState<{ name: string; provider: string; environment: ProjectInfrastructureEnvironment; purpose: string }>({ name: "", provider: "", environment: "development", purpose: "" });
   const [savingInfrastructureResource, setSavingInfrastructureResource] = useState(false);
@@ -522,31 +525,54 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No database entities defined yet.</div>
                   ) : databaseEntities.map((entity) => (
                     <div key={entity.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div>
-                          <code className="text-sm text-blue-300">{entity.name}</code>
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{entity.purpose || "No purpose documented."}</p>
+                      {editingDatabaseEntityId === entity.id ? (
+                        <div className="space-y-3">
+                          <input value={editingDatabaseEntity.name} onChange={(e) => setEditingDatabaseEntity((v) => ({ ...v, name: e.target.value }))} maxLength={120} aria-label="Database entity name" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <textarea value={editingDatabaseEntity.purpose} onChange={(e) => setEditingDatabaseEntity((v) => ({ ...v, purpose: e.target.value }))} maxLength={2000} rows={3} aria-label="Database entity purpose" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={savingDatabaseEntityEdit || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(editingDatabaseEntity.name.trim())} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingDatabaseEntityEdit(true); setError(null);
+                              try {
+                                await updateProjectDatabaseEntity({ projectId: project.id, entityId: entity.id, ownerId: user.uid, ...editingDatabaseEntity });
+                                setDatabaseEntities((items) => items.map((current) => current.id === entity.id ? { ...current, name: editingDatabaseEntity.name.trim(), purpose: editingDatabaseEntity.purpose.trim() } : current));
+                                setEditingDatabaseEntityId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Database entity could not be saved."); }
+                              finally { setSavingDatabaseEntityEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingDatabaseEntityEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingDatabaseEntityId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
+                          </div>
                         </div>
-                        <select value={entity.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectDatabaseEntityStatus;
-                          try {
-                            await updateProjectDatabaseEntityStatus({ projectId: project.id, entityId: entity.id, ownerId: user.uid, status });
-                            setDatabaseEntities((items) => items.map((item) => item.id === entity.id ? { ...item, status } : item));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Database entity status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="draft">Draft</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
-                        </select>
-                        <button type="button" disabled={deletingRequirementId === entity.id} onClick={async () => {
-                          if (!user || !project || !window.confirm("Delete this database entity? This cannot be undone.")) return;
-                          setDeletingRequirementId(entity.id); setError(null);
-                          try {
-                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: entity.id, ownerId: user.uid, collectionName: "databaseEntities" });
-                            setDatabaseEntities((items) => items.filter((current) => current.id !== entity.id));
-                          } catch (err) { setError(err instanceof Error ? err.message : "The database entity could not be deleted."); }
-                          finally { setDeletingRequirementId(null); }
-                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === entity.id ? "Deleting..." : "Delete"}</button>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <code className="text-sm text-blue-300">{entity.name}</code>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{entity.purpose || "No purpose documented."}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={entity.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectDatabaseEntityStatus;
+                              try {
+                                await updateProjectDatabaseEntityStatus({ projectId: project.id, entityId: entity.id, ownerId: user.uid, status });
+                                setDatabaseEntities((items) => items.map((item) => item.id === entity.id ? { ...item, status } : item));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Database entity status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="draft">Draft</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
+                            </select>
+                            <button onClick={() => { setEditingDatabaseEntityId(entity.id); setEditingDatabaseEntity({ name: entity.name, purpose: entity.purpose }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === entity.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this database entity? This cannot be undone.")) return;
+                              setDeletingRequirementId(entity.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: entity.id, ownerId: user.uid, collectionName: "databaseEntities" });
+                                setDatabaseEntities((items) => items.filter((current) => current.id !== entity.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The database entity could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === entity.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
