@@ -306,6 +306,28 @@ describe("Project security rules", () => {
     );
   });
 
+  test("owner can edit infrastructure resource details without changing ownership", async () => {
+    await seedWorkspace(workspaceA, userA.uid);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await setDoc(doc(firestore, "projects", projectA), projectData);
+      await setDoc(doc(firestore, "projects", projectA, "infrastructureResources", "resource-a"), {
+        projectId: projectA, ownerId: userA.uid, name: "App cluster", provider: "AWS",
+        environment: "development", purpose: "Runs app services", status: "planned",
+      });
+    });
+    await assertSucceeds(updateDoc(doc(db(userA), "projects", projectA, "infrastructureResources", "resource-a"), {
+      name: "Production cluster", provider: "AWS EKS", environment: "production",
+      purpose: "Runs production app services", updatedAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(db(userA), "projects", projectA, "infrastructureResources", "resource-a"), {
+      ownerId: userB.uid, updatedAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(db(userB), "projects", projectA, "infrastructureResources", "resource-a"), {
+      name: "Unauthorized", updatedAt: new Date(),
+    }));
+  });
+
   test("owner can edit database entity details without changing ownership", async () => {
     await seedWorkspace(workspaceA, userA.uid);
     await testEnv.withSecurityRulesDisabled(async (context) => {
