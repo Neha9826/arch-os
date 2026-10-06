@@ -306,6 +306,27 @@ describe("Project security rules", () => {
     );
   });
 
+  test("owner can edit design decision details without changing ownership", async () => {
+    await seedWorkspace(workspaceA, userA.uid);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await setDoc(doc(firestore, "projects", projectA), projectData);
+      await setDoc(doc(firestore, "projects", projectA, "designDecisions", "decision-a"), {
+        projectId: projectA, ownerId: userA.uid, title: "Original", decision: "Old decision",
+        rationale: "Old rationale", status: "proposed",
+      });
+    });
+    await assertSucceeds(updateDoc(doc(db(userA), "projects", projectA, "designDecisions", "decision-a"), {
+      title: "Updated", decision: "New decision", rationale: "New rationale", updatedAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(db(userA), "projects", projectA, "designDecisions", "decision-a"), {
+      ownerId: userB.uid, updatedAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(db(userB), "projects", projectA, "designDecisions", "decision-a"), {
+      title: "Unauthorized", updatedAt: new Date(),
+    }));
+  });
+
   test("project owner can delete an engineering record but another user cannot", async () => {
     await seedWorkspace(workspaceA, userA.uid);
     await testEnv.withSecurityRulesDisabled(async (context) => {
