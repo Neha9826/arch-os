@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
 import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectTestCase, type ProjectTestStatus, type ProjectTestType, type ProjectDocumentationEntry, type ProjectDocumentationStatus, type ProjectDocumentationType, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
@@ -52,6 +52,9 @@ export default function ProjectSectionPage() {
   const [milestones, setMilestones] = useState<ProjectMilestone[]>([]);
   const [newMilestone, setNewMilestone] = useState({ title: "", description: "", targetDate: "" });
   const [savingMilestone, setSavingMilestone] = useState(false);
+  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
+  const [editingMilestone, setEditingMilestone] = useState({ title: "", description: "", targetDate: "" });
+  const [savingMilestoneEdit, setSavingMilestoneEdit] = useState(false);
   const [designDecisions, setDesignDecisions] = useState<ProjectDesignDecision[]>([]);
   const [newDesignDecision, setNewDesignDecision] = useState({ title: "", decision: "", rationale: "" });
   const [savingDesignDecision, setSavingDesignDecision] = useState(false);
@@ -692,32 +695,56 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No milestones defined yet.</div>
                   ) : milestones.map((milestone) => (
                     <div key={milestone.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div>
-                          <h3 className="font-semibold">{milestone.title}</h3>
-                          {milestone.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{milestone.description}</p>}
-                          {milestone.targetDate && <p className="mt-3 text-xs text-slate-600">Target: {milestone.targetDate}</p>}
+                      {editingMilestoneId === milestone.id ? (
+                        <div className="space-y-3">
+                          <input value={editingMilestone.title} onChange={(e) => setEditingMilestone((v) => ({ ...v, title: e.target.value }))} maxLength={200} aria-label="Milestone title" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <textarea value={editingMilestone.description} onChange={(e) => setEditingMilestone((v) => ({ ...v, description: e.target.value }))} maxLength={2000} rows={3} aria-label="Milestone description" placeholder="Describe the milestone outcome." className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input type="date" value={editingMilestone.targetDate} onChange={(e) => setEditingMilestone((v) => ({ ...v, targetDate: e.target.value }))} aria-label="Milestone target date" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm" />
+                            <button disabled={savingMilestoneEdit || !editingMilestone.title.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingMilestoneEdit(true); setError(null);
+                              try {
+                                await updateProjectMilestone({ projectId: project.id, milestoneId: milestone.id, ownerId: user.uid, ...editingMilestone });
+                                setMilestones((items) => items.map((item) => item.id === milestone.id ? { ...item, title: editingMilestone.title.trim(), description: editingMilestone.description.trim() || undefined, targetDate: editingMilestone.targetDate || undefined } : item));
+                                setEditingMilestoneId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Milestone could not be saved."); }
+                              finally { setSavingMilestoneEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingMilestoneEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingMilestoneId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
+                          </div>
                         </div>
-                        <select value={milestone.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectMilestoneStatus;
-                          try {
-                            await updateProjectMilestoneStatus({ projectId: project.id, milestoneId: milestone.id, ownerId: user.uid, status });
-                            setMilestones((items) => items.map((item) => item.id === milestone.id ? { ...item, status } : item));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Milestone status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="planned">Planned</option><option value="in-progress">In progress</option><option value="done">Done</option>
-                        </select>
-                        <button type="button" disabled={deletingRequirementId === milestone.id} onClick={async () => {
-                          if (!user || !project || !window.confirm("Delete this milestone? This cannot be undone.")) return;
-                          setDeletingRequirementId(milestone.id); setError(null);
-                          try {
-                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: milestone.id, ownerId: user.uid, collectionName: "roadmap" });
-                            setMilestones((items) => items.filter((current) => current.id !== milestone.id));
-                          } catch (err) { setError(err instanceof Error ? err.message : "The milestone could not be deleted."); }
-                          finally { setDeletingRequirementId(null); }
-                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === milestone.id ? "Deleting..." : "Delete"}</button>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <h3 className="font-semibold">{milestone.title}</h3>
+                            {milestone.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{milestone.description}</p>}
+                            {milestone.targetDate && <p className="mt-3 text-xs text-slate-600">Target: {milestone.targetDate}</p>}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={milestone.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectMilestoneStatus;
+                              try {
+                                await updateProjectMilestoneStatus({ projectId: project.id, milestoneId: milestone.id, ownerId: user.uid, status });
+                                setMilestones((items) => items.map((item) => item.id === milestone.id ? { ...item, status } : item));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Milestone status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="planned">Planned</option><option value="in-progress">In progress</option><option value="done">Done</option>
+                            </select>
+                            <button onClick={() => { setEditingMilestoneId(milestone.id); setEditingMilestone({ title: milestone.title, description: milestone.description ?? "", targetDate: milestone.targetDate ?? "" }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === milestone.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this milestone? This cannot be undone.")) return;
+                              setDeletingRequirementId(milestone.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: milestone.id, ownerId: user.uid, collectionName: "roadmap" });
+                                setMilestones((items) => items.filter((current) => current.id !== milestone.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The milestone could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === milestone.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
