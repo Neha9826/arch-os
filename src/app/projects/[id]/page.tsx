@@ -30,6 +30,7 @@ import {
 } from "@/lib/repositories/projects";
 import {
   listArchitecturesForProject,
+  renameArchitecture,
   type Architecture,
 } from "@/lib/repositories/architectures";
 import {
@@ -76,6 +77,9 @@ export default function ProjectDetailPage() {
   const [editingDetails, setEditingDetails] = useState(false);
   const [projectDraft, setProjectDraft] = useState({ name: "", description: "" });
   const [savingProjectDetails, setSavingProjectDetails] = useState(false);
+  const [editingArchitectureId, setEditingArchitectureId] = useState<string | null>(null);
+  const [architectureNameDraft, setArchitectureNameDraft] = useState("");
+  const [savingArchitectureName, setSavingArchitectureName] = useState(false);
   const [seedingDemo, setSeedingDemo] = useState(false);
   const [resettingDemo, setResettingDemo] = useState(false);
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
@@ -383,14 +387,39 @@ export default function ProjectDetailPage() {
               ) : (
                 <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
                   {architectures.map((architecture) => (
-                    <button
-                      key={architecture.id}
-                      onClick={() => router.push(`/canvas/${architecture.id}`)}
-                      className="rounded-2xl border border-slate-800 bg-slate-900 p-5 text-left hover:border-slate-700"
-                    >
-                      <h3 className="font-semibold text-white">{architecture.name}</h3>
-                      <p className="mt-2 text-xs text-slate-500">Open architecture studio</p>
-                    </button>
+                    <article key={architecture.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5 hover:border-slate-700">
+                      {editingArchitectureId === architecture.id ? (
+                        <form onSubmit={async (event) => {
+                          event.preventDefault();
+                          if (!user || !architectureNameDraft.trim() || savingArchitectureName) return;
+                          setSavingArchitectureName(true); setError(null);
+                          try {
+                            await renameArchitecture(architecture.id, architectureNameDraft.trim(), user.uid);
+                            setArchitectures((items) => items.map((item) => item.id === architecture.id ? { ...item, name: architectureNameDraft.trim() } : item));
+                            setEditingArchitectureId(null);
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Architecture name could not be updated.");
+                          } finally {
+                            setSavingArchitectureName(false);
+                          }
+                        }} className="space-y-3">
+                          <label htmlFor={`architecture-name-${architecture.id}`} className="block text-xs font-medium text-slate-400">Architecture name</label>
+                          <input id={`architecture-name-${architecture.id}`} value={architectureNameDraft} onChange={(event) => setArchitectureNameDraft(event.target.value)} maxLength={120} required autoFocus className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+                          <div className="flex flex-wrap gap-2">
+                            <button type="submit" disabled={savingArchitectureName || !architectureNameDraft.trim() || architectureNameDraft.trim().length > 120} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold disabled:opacity-50">{savingArchitectureName ? "Saving..." : "Save name"}</button>
+                            <button type="button" onClick={() => setEditingArchitectureId(null)} disabled={savingArchitectureName} className="rounded-lg border border-slate-700 px-3 py-2 text-xs">Cancel</button>
+                          </div>
+                        </form>
+                      ) : (
+                        <>
+                          <button type="button" onClick={() => router.push(`/canvas/${architecture.id}`)} className="block w-full text-left">
+                            <h3 className="font-semibold text-white">{architecture.name}</h3>
+                            <p className="mt-2 text-xs text-slate-500">Open architecture studio</p>
+                          </button>
+                          <button type="button" onClick={() => { setArchitectureNameDraft(architecture.name); setEditingArchitectureId(architecture.id); setError(null); }} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-600 hover:text-white"><Pencil size={13} /> Rename</button>
+                        </>
+                      )}
+                    </article>
                   ))}
                 </div>
               )}
