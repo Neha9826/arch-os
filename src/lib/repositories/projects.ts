@@ -1183,6 +1183,40 @@ export async function createProjectTestCase(input: {
   return testRef.id;
 }
 
+export async function updateProjectTestCase(input: {
+  projectId: string;
+  testCaseId: string;
+  ownerId: string;
+  name: string;
+  type: ProjectTestType;
+  path: string;
+  purpose: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const testRef = doc(projectRef, PROJECT_TESTS_SUBCOLLECTION, input.testCaseId);
+  const snapshot = await getDoc(testRef);
+  if (!snapshot.exists()) throw new Error("Project test case not found.");
+  const existing = toProjectTestCase(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this project test case.");
+  }
+  const testCase: ProjectTestCase = {
+    ...existing,
+    name: input.name.trim(),
+    type: input.type,
+    path: input.path.trim(),
+    purpose: input.purpose.trim(),
+  };
+  if (!isValidProjectTestCase(testCase)) throw new Error("Invalid project test case.");
+  await updateDoc(testRef, {
+    name: testCase.name,
+    type: testCase.type,
+    path: testCase.path,
+    purpose: testCase.purpose,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function updateProjectTestCaseStatus(input: {
   projectId: string;
   testCaseId: string;
