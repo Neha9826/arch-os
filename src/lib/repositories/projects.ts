@@ -1302,6 +1302,40 @@ export async function createProjectDocumentation(input: {
   return documentationRef.id;
 }
 
+export async function updateProjectDocumentation(input: {
+  projectId: string;
+  documentationId: string;
+  ownerId: string;
+  title: string;
+  type: ProjectDocumentationType;
+  path: string;
+  summary: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const documentationRef = doc(projectRef, PROJECT_DOCUMENTATION_SUBCOLLECTION, input.documentationId);
+  const snapshot = await getDoc(documentationRef);
+  if (!snapshot.exists()) throw new Error("Project documentation entry not found.");
+  const existing = toProjectDocumentationEntry(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this project documentation entry.");
+  }
+  const entry: ProjectDocumentationEntry = {
+    ...existing,
+    title: input.title.trim(),
+    type: input.type,
+    path: input.path.trim(),
+    summary: input.summary.trim(),
+  };
+  if (!isValidProjectDocumentationEntry(entry)) throw new Error("Invalid project documentation entry.");
+  await updateDoc(documentationRef, {
+    title: entry.title,
+    type: entry.type,
+    path: entry.path,
+    summary: entry.summary,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function updateProjectDocumentationStatus(input: {
   projectId: string;
   documentationId: string;
