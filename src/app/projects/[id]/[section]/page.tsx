@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, updateProjectApiContract, createProjectCodeArtifact, updateProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, updateProjectDatabaseEntity, createProjectDesignDecision, updateProjectDesignDecision, createProjectInfrastructureResource, updateProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, updateProjectApiContract, createProjectCodeArtifact, updateProjectCodeArtifact, createProjectTestCase, updateProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, updateProjectDatabaseEntity, createProjectDesignDecision, updateProjectDesignDecision, createProjectInfrastructureResource, updateProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
 import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectTestCase, type ProjectTestStatus, type ProjectTestType, type ProjectDocumentationEntry, type ProjectDocumentationStatus, type ProjectDocumentationType, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
@@ -88,6 +88,9 @@ export default function ProjectSectionPage() {
   const [testCases, setTestCases] = useState<ProjectTestCase[]>([]);
   const [newTestCase, setNewTestCase] = useState({ name: "", type: "unit" as ProjectTestType, path: "", purpose: "" });
   const [savingTestCase, setSavingTestCase] = useState(false);
+  const [editingTestCaseId, setEditingTestCaseId] = useState<string | null>(null);
+  const [editingTestCase, setEditingTestCase] = useState({ name: "", type: "unit" as ProjectTestType, path: "", purpose: "" });
+  const [savingTestCaseEdit, setSavingTestCaseEdit] = useState(false);
   const [documentation, setDocumentation] = useState<ProjectDocumentationEntry[]>([]);
   const [newDocumentation, setNewDocumentation] = useState({ title: "", type: "readme" as ProjectDocumentationType, path: "", summary: "" });
   const [savingDocumentation, setSavingDocumentation] = useState(false);
@@ -345,35 +348,60 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No test areas defined yet.</div>
                   ) : testCases.map((testCase) => (
                     <div key={testCase.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-semibold">{testCase.name}</h3>
-                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{testCase.type}</span>
+                      {editingTestCaseId === testCase.id ? (
+                        <div className="space-y-3">
+                          <input value={editingTestCase.name} onChange={(e) => setEditingTestCase((v) => ({ ...v, name: e.target.value }))} maxLength={200} aria-label="Test area name" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <select value={editingTestCase.type} onChange={(e) => setEditingTestCase((v) => ({ ...v, type: e.target.value as ProjectTestType }))} aria-label="Test type" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm"><option value="unit">Unit</option><option value="integration">Integration</option><option value="e2e">E2E</option><option value="security">Security</option><option value="performance">Performance</option><option value="other">Other</option></select>
+                          <input value={editingTestCase.path} onChange={(e) => setEditingTestCase((v) => ({ ...v, path: e.target.value }))} maxLength={500} aria-label="Test file path" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <textarea value={editingTestCase.purpose} onChange={(e) => setEditingTestCase((v) => ({ ...v, purpose: e.target.value }))} maxLength={2000} rows={3} aria-label="Test purpose" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={savingTestCaseEdit || !editingTestCase.name.trim() || !editingTestCase.path.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingTestCaseEdit(true); setError(null);
+                              try {
+                                await updateProjectTestCase({ projectId: project.id, testCaseId: testCase.id, ownerId: user.uid, ...editingTestCase });
+                                setTestCases((items) => items.map((current) => current.id === testCase.id ? { ...current, ...editingTestCase, name: editingTestCase.name.trim(), path: editingTestCase.path.trim(), purpose: editingTestCase.purpose.trim() } : current));
+                                setEditingTestCaseId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Test case could not be saved."); }
+                              finally { setSavingTestCaseEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingTestCaseEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingTestCaseId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
                           </div>
-                          <p className="mt-2 font-mono text-xs text-slate-500">{testCase.path}</p>
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{testCase.purpose || "No purpose documented."}</p>
                         </div>
-                        <select value={testCase.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectTestStatus;
-                          try {
-                            await updateProjectTestCaseStatus({ projectId: project.id, testCaseId: testCase.id, ownerId: user.uid, status });
-                            setTestCases((items) => items.map((item) => item.id === testCase.id ? { ...item, status } : item));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Test status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="planned">Planned</option><option value="passing">Passing</option><option value="failing">Failing</option><option value="skipped">Skipped</option>
-                        </select>
-                        <button type="button" disabled={deletingRequirementId === testCase.id} onClick={async () => {
-                          if (!user || !project || !window.confirm("Delete this test case? This cannot be undone.")) return;
-                          setDeletingRequirementId(testCase.id); setError(null);
-                          try {
-                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: testCase.id, ownerId: user.uid, collectionName: "testCases" });
-                            setTestCases((items) => items.filter((current) => current.id !== testCase.id));
-                          } catch (err) { setError(err instanceof Error ? err.message : "The test case could not be deleted."); }
-                          finally { setDeletingRequirementId(null); }
-                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === testCase.id ? "Deleting..." : "Delete"}</button>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-semibold">{testCase.name}</h3>
+                              <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{testCase.type}</span>
+                            </div>
+                            <p className="mt-2 font-mono text-xs text-slate-500">{testCase.path}</p>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{testCase.purpose || "No purpose documented."}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={testCase.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectTestStatus;
+                              try {
+                                await updateProjectTestCaseStatus({ projectId: project.id, testCaseId: testCase.id, ownerId: user.uid, status });
+                                setTestCases((items) => items.map((item) => item.id === testCase.id ? { ...item, status } : item));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Test status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="planned">Planned</option><option value="passing">Passing</option><option value="failing">Failing</option><option value="skipped">Skipped</option>
+                            </select>
+                            <button onClick={() => { setEditingTestCaseId(testCase.id); setEditingTestCase({ name: testCase.name, type: testCase.type, path: testCase.path, purpose: testCase.purpose }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === testCase.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this test case? This cannot be undone.")) return;
+                              setDeletingRequirementId(testCase.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: testCase.id, ownerId: user.uid, collectionName: "testCases" });
+                                setTestCases((items) => items.filter((current) => current.id !== testCase.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The test case could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === testCase.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
