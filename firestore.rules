@@ -145,11 +145,14 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.projectId == resource.data.projectId
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.name == resource.data.name
-        && request.resource.data.purpose == resource.data.purpose
+        && request.resource.data.name is string
+        && request.resource.data.name.matches("^[A-Za-z_][A-Za-z0-9_]*$")
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.purpose is string
+        && request.resource.data.purpose.size() <= 2000
         && request.resource.data.status in ["draft", "active", "deprecated"]
         && request.resource.data.keys().hasOnly(["projectId", "ownerId", "name", "purpose", "status", "createdAt", "updatedAt"])
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "updatedAt"]);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "purpose", "status", "updatedAt"]);
 
       allow delete: if isParentProjectOwner()
         && resource.data.ownerId == request.auth.uid
