@@ -1050,6 +1050,43 @@ export async function createProjectCodeArtifact(input: {
   return artifactRef.id;
 }
 
+export async function updateProjectCodeArtifact(input: {
+  projectId: string;
+  artifactId: string;
+  ownerId: string;
+  name: string;
+  language: string;
+  runtime: string;
+  path: string;
+  purpose: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const artifactRef = doc(projectRef, PROJECT_CODE_SUBCOLLECTION, input.artifactId);
+  const snapshot = await getDoc(artifactRef);
+  if (!snapshot.exists()) throw new Error("Code artifact not found.");
+  const existing = toProjectCodeArtifact(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this code artifact.");
+  }
+  const artifact: ProjectCodeArtifact = {
+    ...existing,
+    name: input.name.trim(),
+    language: input.language.trim(),
+    runtime: input.runtime.trim(),
+    path: input.path.trim(),
+    purpose: input.purpose.trim(),
+  };
+  if (!isValidProjectCodeArtifact(artifact)) throw new Error("Invalid project code artifact.");
+  await updateDoc(artifactRef, {
+    name: artifact.name,
+    language: artifact.language,
+    runtime: artifact.runtime,
+    path: artifact.path,
+    purpose: artifact.purpose,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function updateProjectCodeArtifactStatus(input: {
   projectId: string;
   artifactId: string;
