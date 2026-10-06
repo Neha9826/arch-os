@@ -182,7 +182,7 @@ export async function updateProject(input: {
 
   await updateDoc(doc(db, PROJECTS_COLLECTION, input.projectId), {
     name: input.name.trim(),
-    description: input.description?.trim() || undefined,
+    description: input.description?.trim() ?? "",
     status: input.status,
     updatedAt: serverTimestamp(),
   });
