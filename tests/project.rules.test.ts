@@ -269,6 +269,23 @@ describe("Project security rules", () => {
     );
   });
 
+  test("project owner can delete an engineering record but another user cannot", async () => {
+    await seedWorkspace(workspaceA, userA.uid);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await setDoc(doc(firestore, "projects", projectA), projectData);
+      await setDoc(doc(firestore, "projects", projectA, "roadmap", "milestone-a"), {
+        projectId: projectA,
+        ownerId: userA.uid,
+        title: "Milestone",
+        status: "planned",
+      });
+    });
+
+    await assertFails(deleteDoc(doc(db(userB), "projects", projectA, "roadmap", "milestone-a")));
+    await assertSucceeds(deleteDoc(doc(db(userA), "projects", projectA, "roadmap", "milestone-a")));
+  });
+
   test("another user cannot edit a requirement", async () => {
     await seedWorkspace(workspaceA, userA.uid);
     await testEnv.withSecurityRulesDisabled(async (context) => {
