@@ -36,6 +36,7 @@ import {
   type ProjectSectionStatus,
 } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
+import { seedProjectDemoData } from "@/lib/demo/seedProjectDemoData";
 
 const SECTION_META: Record<
   ProjectSectionKey,
@@ -69,6 +70,8 @@ export default function ProjectDetailPage() {
   const [architectures, setArchitectures] = useState<Architecture[]>([]);
   const [fetching, setFetching] = useState(true);
   const [savingSection, setSavingSection] = useState<ProjectSectionKey | null>(null);
+  const [seedingDemo, setSeedingDemo] = useState(false);
+  const [seedMessage, setSeedMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -140,6 +143,26 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const loadDemoData = async () => {
+    if (!user || !project || seedingDemo) return;
+    setSeedingDemo(true);
+    setSeedMessage(null);
+    setError(null);
+    try {
+      const added = await seedProjectDemoData(project, user.uid);
+      const refreshed = await getProject(project.id);
+      if (refreshed) setProject(refreshed);
+      setArchitectures(await listArchitecturesForProject(project.id, user.uid));
+      setSeedMessage(added.length
+        ? `Added demo data for: ${added.join(", ")}. Reload the project to review every module.`
+        : "Demo records already exist. No duplicate data was created.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Demo data could not be created.");
+    } finally {
+      setSeedingDemo(false);
+    }
+  };
+
   if (loading || fetching) {
     return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-400">Loading project...</div>;
   }
@@ -155,6 +178,7 @@ export default function ProjectDetailPage() {
           <ArrowLeft size={16} /> Projects
         </button>
 
+        {seedMessage ? <div role="status" className="mb-4 rounded-xl border border-violet-800/60 bg-violet-950/30 p-3 text-sm text-violet-200">{seedMessage}</div> : null}
         {error ? (
           <div className="mb-6 rounded-2xl border border-red-900/60 bg-red-950/30 p-4 text-sm text-red-200">{error}</div>
         ) : null}
@@ -187,6 +211,15 @@ export default function ProjectDetailPage() {
                 >
                   <Network size={16} /> New Architecture
                 </button>
+                {process.env.NODE_ENV !== "production" ? (
+                  <button
+                    onClick={() => void loadDemoData()}
+                    disabled={seedingDemo}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-violet-700/70 bg-violet-950/40 px-4 py-2.5 text-sm font-semibold text-violet-200 hover:bg-violet-900/50 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <Boxes size={16} /> {seedingDemo ? "Preparing demo data…" : "Load test data"}
+                  </button>
+                ) : null}
                 </div>
               </div>
 
