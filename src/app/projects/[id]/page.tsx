@@ -36,7 +36,7 @@ import {
   type ProjectSectionStatus,
 } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
-import { seedProjectDemoData } from "@/lib/demo/seedProjectDemoData";
+import { resetProjectDemoData, seedProjectDemoData } from "@/lib/demo/seedProjectDemoData";
 
 const SECTION_META: Record<
   ProjectSectionKey,
@@ -71,6 +71,7 @@ export default function ProjectDetailPage() {
   const [fetching, setFetching] = useState(true);
   const [savingSection, setSavingSection] = useState<ProjectSectionKey | null>(null);
   const [seedingDemo, setSeedingDemo] = useState(false);
+  const [resettingDemo, setResettingDemo] = useState(false);
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -143,6 +144,28 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const resetDemoData = async () => {
+    if (!user || !project || resettingDemo || seedingDemo) return;
+    const confirmed = window.confirm("Remove only ArchOS demo-seeded records from this project? Your own records will be preserved.");
+    if (!confirmed) return;
+    setResettingDemo(true);
+    setSeedMessage(null);
+    setError(null);
+    try {
+      const removed = await resetProjectDemoData(project, user.uid);
+      const refreshed = await getProject(project.id);
+      if (refreshed) setProject(refreshed);
+      setArchitectures(await listArchitecturesForProject(project.id, user.uid));
+      setSeedMessage(removed.length
+        ? `Removed demo data from: ${removed.join(", ")}. You can now seed again.`
+        : "No matching demo records were found to remove.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Demo data could not be reset.");
+    } finally {
+      setResettingDemo(false);
+    }
+  };
+
   const loadDemoData = async () => {
     if (!user || !project || seedingDemo) return;
     setSeedingDemo(true);
@@ -212,13 +235,22 @@ export default function ProjectDetailPage() {
                   <Network size={16} /> New Architecture
                 </button>
                 {process.env.NODE_ENV !== "production" ? (
-                  <button
-                    onClick={() => void loadDemoData()}
-                    disabled={seedingDemo}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-violet-700/70 bg-violet-950/40 px-4 py-2.5 text-sm font-semibold text-violet-200 hover:bg-violet-900/50 disabled:cursor-wait disabled:opacity-60"
-                  >
-                    <Boxes size={16} /> {seedingDemo ? "Preparing demo data…" : "Load test data"}
-                  </button>
+                  <>
+                    <button
+                      onClick={() => void loadDemoData()}
+                      disabled={seedingDemo || resettingDemo}
+                      className="flex items-center justify-center gap-2 rounded-xl border border-violet-700/70 bg-violet-950/40 px-4 py-2.5 text-sm font-semibold text-violet-200 hover:bg-violet-900/50 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      <Boxes size={16} /> {seedingDemo ? "Preparing demo data…" : "Load test data"}
+                    </button>
+                    <button
+                      onClick={() => void resetDemoData()}
+                      disabled={seedingDemo || resettingDemo}
+                      className="flex items-center justify-center gap-2 rounded-xl border border-red-800/70 bg-red-950/30 px-4 py-2.5 text-sm font-semibold text-red-200 hover:bg-red-900/40 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {resettingDemo ? "Resetting demo…" : "Reset demo data"}
+                    </button>
+                  </>
                 ) : null}
                 </div>
               </div>
