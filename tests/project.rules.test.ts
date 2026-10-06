@@ -502,6 +502,25 @@ describe("Project security rules", () => {
     );
   });
 
+  test("project owner can update project details but cannot change ownership", async () => {
+    await seedWorkspace(workspaceA, userA.uid);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "projects", projectA), projectData);
+    });
+    await assertSucceeds(updateDoc(doc(db(userA), "projects", projectA), {
+      name: "Renamed project", description: "Updated project description", updatedAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(db(userA), "projects", projectA), {
+      ownerId: userB.uid, updatedAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(db(userB), "projects", projectA), {
+      name: "Unauthorized", updatedAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(db(userA), "projects", projectA), {
+      description: "x".repeat(1001), updatedAt: new Date(),
+    }));
+  });
+
   test("unauthenticated users cannot read or create projects", async () => {
     await seedWorkspace(workspaceA, userA.uid);
 
