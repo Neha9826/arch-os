@@ -67,6 +67,23 @@ export default function ProjectExecutionPage() {
   const now = new Date();
   const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
+  const formatDueDate = (dueDate: string, status: ProjectExecutionTaskStatus) => {
+    const [year, month, day] = dueDate.split("-").map(Number);
+    const [todayYear, todayMonth, todayDay] = todayKey.split("-").map(Number);
+    const dueDay = Date.UTC(year, month - 1, day);
+    const currentDay = Date.UTC(todayYear, todayMonth - 1, todayDay);
+    const daysUntilDue = Math.round((dueDay - currentDay) / 86_400_000);
+    if (status === "done") return dueDate;
+    if (daysUntilDue < 0) {
+      const overdueDays = Math.abs(daysUntilDue);
+      return `Overdue by ${overdueDays} ${overdueDays === 1 ? "day" : "days"} · ${dueDate}`;
+    }
+    if (daysUntilDue === 0) return `Due today · ${dueDate}`;
+    if (daysUntilDue === 1) return `Due tomorrow · ${dueDate}`;
+    if (daysUntilDue <= 7) return `Due in ${daysUntilDue} days · ${dueDate}`;
+    return dueDate;
+  };
+
   const summary = useMemo(() => ({
     total: tasks.length, active: tasks.filter((task) => task.status !== "done").length,
     blocked: tasks.filter((task) => task.status === "blocked").length, done: tasks.filter((task) => task.status === "done").length,
@@ -275,7 +292,7 @@ export default function ProjectExecutionPage() {
           {tasks.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-800 py-16 text-center text-sm text-slate-500">No execution tasks yet.</div> : filteredTasks.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-800 py-16 text-center text-sm text-slate-500">No tasks match the current filters.</div> : <div className="space-y-3">{filteredTasks.map((task) => (
             <article key={task.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0"><div className="flex flex-wrap items-center gap-2">{task.status === "done" ? <CheckCircle2 size={16} className="text-emerald-400" /> : task.status === "blocked" ? <CircleAlert size={16} className="text-red-400" /> : <ListTodo size={16} className="text-blue-400" />}<h3 className="font-semibold">{task.title}</h3><span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{task.priority}</span>{task.section ? <span className="rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] text-slate-500">{SECTION_LABELS[task.section]}</span> : null}</div>{task.description ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-400">{task.description}</p> : null}<div className="mt-3 flex flex-wrap gap-3 text-[11px] text-slate-600">{task.sourceId ? <span>Source: {task.sourceId}</span> : null}{task.dueDate ? <span className={task.status !== "done" && task.dueDate < todayKey ? "font-semibold text-red-300" : ""}>{task.status !== "done" && task.dueDate < todayKey ? "Overdue · " : "Due: "}{task.dueDate}</span> : null}</div></div>
+                <div className="min-w-0"><div className="flex flex-wrap items-center gap-2">{task.status === "done" ? <CheckCircle2 size={16} className="text-emerald-400" /> : task.status === "blocked" ? <CircleAlert size={16} className="text-red-400" /> : <ListTodo size={16} className="text-blue-400" />}<h3 className="font-semibold">{task.title}</h3><span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{task.priority}</span>{task.section ? <span className="rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] text-slate-500">{SECTION_LABELS[task.section]}</span> : null}</div>{task.description ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-400">{task.description}</p> : null}<div className="mt-3 flex flex-wrap gap-3 text-[11px] text-slate-600">{task.sourceId ? <span>Source: {task.sourceId}</span> : null}{task.dueDate ? <span className={task.status !== "done" && task.dueDate < todayKey ? "font-semibold text-red-300" : task.status !== "done" && task.dueDate === todayKey ? "font-semibold text-amber-300" : ""}>{formatDueDate(task.dueDate, task.status)}</span> : null}</div></div>
                 <div className="flex items-center gap-2"><select value={task.status} onChange={(e) => void changeStatus(task, e.target.value as ProjectExecutionTaskStatus)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">{Object.entries(STATUS_META).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><button onClick={() => startEditing(task)} className="rounded-lg border border-slate-800 p-2 text-slate-500 hover:border-blue-900 hover:text-blue-400" title="Edit task"><Pencil size={15} /></button><button onClick={() => void removeTask(task)} className="rounded-lg border border-slate-800 p-2 text-slate-500 hover:border-red-900 hover:text-red-400" title="Delete task"><Trash2 size={15} /></button></div>
               </div>
             </article>
