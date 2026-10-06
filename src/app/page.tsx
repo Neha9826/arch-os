@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import {
-  Activity, Archive, ArrowRight, Boxes, CheckCircle2, CircleHelp,
-  Cpu, FolderKanban, LogOut, Plus, Settings2, ShieldCheck, Workflow,
+  Activity, Archive, ArrowRight, Boxes, CheckCircle2,
+  Cpu, FolderKanban, LogOut, Plus, ShieldCheck, Workflow,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { auth } from '@/lib/firebase';
