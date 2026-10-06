@@ -306,6 +306,28 @@ describe("Project security rules", () => {
     );
   });
 
+  test("owner can edit test case details without changing ownership", async () => {
+    await seedWorkspace(workspaceA, userA.uid);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await setDoc(doc(firestore, "projects", projectA), projectData);
+      await setDoc(doc(firestore, "projects", projectA, "testCases", "test-a"), {
+        projectId: projectA, ownerId: userA.uid, name: "API tests", type: "unit",
+        path: "tests/api.test.ts", purpose: "Checks API helpers", status: "planned",
+      });
+    });
+    await assertSucceeds(updateDoc(doc(db(userA), "projects", projectA, "testCases", "test-a"), {
+      name: "API integration tests", type: "integration", path: "tests/api.integration.test.ts",
+      purpose: "Checks API integration behavior", updatedAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(db(userA), "projects", projectA, "testCases", "test-a"), {
+      ownerId: userB.uid, updatedAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(db(userB), "projects", projectA, "testCases", "test-a"), {
+      name: "Unauthorized", updatedAt: new Date(),
+    }));
+  });
+
   test("owner can edit code artifact details without changing ownership", async () => {
     await seedWorkspace(workspaceA, userA.uid);
     await testEnv.withSecurityRulesDisabled(async (context) => {
