@@ -143,7 +143,7 @@ export async function createProject(input: {
     ownerId: input.ownerId,
     createdBy: input.createdBy,
     name: input.name.trim(),
-    description: input.description?.trim() || undefined,
+    description: input.description?.trim() ?? "",
     status: "active",
     sections: createDefaultProjectSections(),
   };
