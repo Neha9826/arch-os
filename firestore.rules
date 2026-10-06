@@ -93,6 +93,9 @@ service cloud.firestore {
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120
         && request.resource.data.status in ["active", "archived"]
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 1000
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "description", "status", "sections", "planning", "updatedAt"])
         && request.resource.data.sections is map
         && request.resource.data.sections.keys().size() == 11
         && request.resource.data.sections.keys().hasAll([
