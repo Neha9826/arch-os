@@ -652,6 +652,40 @@ export async function createProjectApiContract(input: {
   return contractRef.id;
 }
 
+export async function updateProjectApiContract(input: {
+  projectId: string;
+  contractId: string;
+  ownerId: string;
+  method: ProjectApiMethod;
+  path: string;
+  title: string;
+  description?: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const contractRef = doc(projectRef, PROJECT_API_SUBCOLLECTION, input.contractId);
+  const snapshot = await getDoc(contractRef);
+  if (!snapshot.exists()) throw new Error("API contract not found.");
+  const existing = toProjectApiContract(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this API contract.");
+  }
+  const contract: ProjectApiContract = {
+    ...existing,
+    method: input.method,
+    path: input.path.trim(),
+    title: input.title.trim(),
+    description: input.description?.trim() || undefined,
+  };
+  if (!isValidProjectApiContract(contract)) throw new Error("Invalid project API contract.");
+  await updateDoc(contractRef, {
+    method: contract.method,
+    path: contract.path,
+    title: contract.title,
+    description: contract.description ?? "",
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function updateProjectApiContractStatus(input: {
   projectId: string;
   contractId: string;
