@@ -19,10 +19,13 @@ import {
   BookOpen,
   Circle,
   ListTodo,
+  Pencil,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
   getProject,
+  updateProject,
   updateProjectSectionStatus,
 } from "@/lib/repositories/projects";
 import {
@@ -70,6 +73,9 @@ export default function ProjectDetailPage() {
   const [architectures, setArchitectures] = useState<Architecture[]>([]);
   const [fetching, setFetching] = useState(true);
   const [savingSection, setSavingSection] = useState<ProjectSectionKey | null>(null);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [projectDraft, setProjectDraft] = useState({ name: "", description: "" });
+  const [savingProjectDetails, setSavingProjectDetails] = useState(false);
   const [seedingDemo, setSeedingDemo] = useState(false);
   const [resettingDemo, setResettingDemo] = useState(false);
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
@@ -220,6 +226,9 @@ export default function ProjectDetailPage() {
                   <p className="mt-2 max-w-3xl text-sm text-slate-400">
                     {project.description || "Engineering workspace for this product."}
                   </p>
+                  <button type="button" onClick={() => { setProjectDraft({ name: project.name, description: project.description ?? "" }); setEditingDetails((value) => !value); setError(null); }} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-300 hover:border-blue-600 hover:text-white">
+                    {editingDetails ? <X size={14} /> : <Pencil size={14} />} {editingDetails ? "Cancel editing" : "Edit project details"}
+                  </button>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
                 <button
@@ -268,6 +277,37 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
             </header>
+
+            {editingDetails ? (
+              <form className="mt-6 max-w-3xl space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-5" onSubmit={async (event) => {
+                event.preventDefault();
+                if (!project || savingProjectDetails) return;
+                setSavingProjectDetails(true); setError(null);
+                try {
+                  await updateProject({ projectId: project.id, name: projectDraft.name, description: projectDraft.description, status: project.status });
+                  setProject((current) => current ? { ...current, name: projectDraft.name.trim(), description: projectDraft.description.trim() } : current);
+                  setEditingDetails(false);
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Project details could not be saved.");
+                } finally {
+                  setSavingProjectDetails(false);
+                }
+              }}>
+                <div>
+                  <label htmlFor="project-name" className="mb-1 block text-xs font-medium text-slate-400">Project name</label>
+                  <input id="project-name" value={projectDraft.name} onChange={(event) => setProjectDraft((current) => ({ ...current, name: event.target.value }))} maxLength={120} required className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white" />
+                </div>
+                <div>
+                  <label htmlFor="project-description" className="mb-1 block text-xs font-medium text-slate-400">Description</label>
+                  <textarea id="project-description" value={projectDraft.description} onChange={(event) => setProjectDraft((current) => ({ ...current, description: event.target.value }))} maxLength={1000} rows={3} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white" placeholder="What is this project building?" />
+                  <p className="mt-1 text-right text-[11px] text-slate-600">{projectDraft.description.length}/1000</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="submit" disabled={savingProjectDetails || !projectDraft.name.trim() || projectDraft.name.trim().length > 120 || projectDraft.description.length > 1000} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">{savingProjectDetails ? "Saving..." : "Save details"}</button>
+                  <button type="button" onClick={() => setEditingDetails(false)} disabled={savingProjectDetails} className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm text-slate-300 disabled:opacity-50">Cancel</button>
+                </div>
+              </form>
+            ) : null}
 
             <section className="mt-8">
               <div className="mb-4">
