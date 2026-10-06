@@ -88,7 +88,7 @@ export default function ProjectExecutionPage() {
       const bDue = b.dueDate || "9999-12-31";
       return aDue.localeCompare(bDue) || (a.status === "done" ? 1 : 0) - (b.status === "done" ? 1 : 0) || a.title.localeCompare(b.title);
     });
-  }, [tasks, search, statusFilter, priorityFilter, sectionFilter, sortBy]);
+  }, [tasks, search, statusFilter, priorityFilter, sectionFilter, sortBy, todayKey]);
 
   const addTask = async () => {
     if (!user || !newTask.title.trim() || saving) return;
