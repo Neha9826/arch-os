@@ -29,6 +29,7 @@ export default function ProjectExecutionPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | ProjectExecutionTaskStatus>("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | ProjectExecutionTaskPriority>("all");
   const [sectionFilter, setSectionFilter] = useState<ProjectSectionKey | "all">("all");
+  const [sortBy, setSortBy] = useState<"dueDate" | "priority" | "title">("dueDate");
   const [error, setError] = useState<string | null>(null);
   const [newTask, setNewTask] = useState<{ title: string; description: string; priority: ProjectExecutionTaskPriority; section: ProjectSectionKey | ""; sourceId: string; dueDate: string }>({
     title: "", description: "", priority: "medium", section: "", sourceId: "", dueDate: "",
@@ -65,18 +66,26 @@ export default function ProjectExecutionPage() {
   const summary = useMemo(() => ({
     total: tasks.length, active: tasks.filter((task) => task.status !== "done").length,
     blocked: tasks.filter((task) => task.status === "blocked").length, done: tasks.filter((task) => task.status === "done").length,
+    overdue: tasks.filter((task) => task.status !== "done" && Boolean(task.dueDate) && task.dueDate! < new Date().toLocaleDateString("en-CA")).length,
   }), [tasks]);
 
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
+    const priorityRank: Record<ProjectExecutionTaskPriority, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     return tasks.filter((task) => {
       const matchesSearch = !query || [task.title, task.description, task.sourceId].some((value) => value?.toLowerCase().includes(query));
       const matchesStatus = statusFilter === "all" || task.status === statusFilter;
       const matchesPriority = priorityFilter === "all" || task.priority === priorityFilter;
       const matchesSection = sectionFilter === "all" || task.section === sectionFilter;
       return matchesSearch && matchesStatus && matchesPriority && matchesSection;
+    }).sort((a, b) => {
+      if (sortBy === "priority") return priorityRank[a.priority] - priorityRank[b.priority] || a.title.localeCompare(b.title);
+      if (sortBy === "title") return a.title.localeCompare(b.title);
+      const aDue = a.dueDate || "9999-12-31";
+      const bDue = b.dueDate || "9999-12-31";
+      return aDue.localeCompare(bDue) || (a.status === "done" ? 1 : 0) - (b.status === "done" ? 1 : 0) || a.title.localeCompare(b.title);
     });
-  }, [tasks, search, statusFilter, priorityFilter, sectionFilter]);
+  }, [tasks, search, statusFilter, priorityFilter, sectionFilter, sortBy]);
 
   const addTask = async () => {
     if (!user || !newTask.title.trim() || saving) return;
@@ -152,7 +161,7 @@ export default function ProjectExecutionPage() {
         <header className="border-b border-slate-800 pb-8">
           <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
             <div><div className="flex items-center gap-3"><ListTodo size={22} className="text-blue-400" /><h1 className="text-3xl font-bold tracking-tight">Execution</h1></div><p className="mt-2 max-w-2xl text-sm text-slate-400">Turn project definitions into actionable, traceable engineering work.</p></div>
-            <div className="grid grid-cols-4 gap-2 text-center text-xs">{[["Total", summary.total], ["Active", summary.active], ["Blocked", summary.blocked], ["Done", summary.done]].map(([label, value]) => <div key={label} className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2"><div className="text-lg font-semibold">{value}</div><div className="text-slate-500">{label}</div></div>)}</div>
+            <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-5">{[["Total", summary.total], ["Active", summary.active], ["Blocked", summary.blocked], ["Overdue", summary.overdue], ["Done", summary.done]].map(([label, value]) => <div key={label} className={`rounded-xl border px-3 py-2 ${label === "Overdue" && Number(value) > 0 ? "border-red-900/70 bg-red-950/30" : "border-slate-800 bg-slate-900"}`}><div className={`text-lg font-semibold ${label === "Overdue" && Number(value) > 0 ? "text-red-300" : ""}`}>{value}</div><div className="text-slate-500">{label}</div></div>)}</div>
           </div>
         </header>
         <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
@@ -193,6 +202,9 @@ export default function ProjectExecutionPage() {
                   <option value="all">All sections</option>
                   {Object.entries(SECTION_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                 </select>
+                <select aria-label="Sort tasks" value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                  <option value="dueDate">Sort: due date</option><option value="priority">Sort: priority</option><option value="title">Sort: title</option>
+                </select>
               </div>
             </div>
             {(search || statusFilter !== "all" || priorityFilter !== "all" || sectionFilter !== "all") ? (
@@ -205,7 +217,7 @@ export default function ProjectExecutionPage() {
           {tasks.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-800 py-16 text-center text-sm text-slate-500">No execution tasks yet.</div> : filteredTasks.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-800 py-16 text-center text-sm text-slate-500">No tasks match the current filters.</div> : <div className="space-y-3">{filteredTasks.map((task) => (
             <article key={task.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0"><div className="flex flex-wrap items-center gap-2">{task.status === "done" ? <CheckCircle2 size={16} className="text-emerald-400" /> : task.status === "blocked" ? <CircleAlert size={16} className="text-red-400" /> : <ListTodo size={16} className="text-blue-400" />}<h3 className="font-semibold">{task.title}</h3><span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{task.priority}</span>{task.section ? <span className="rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] text-slate-500">{SECTION_LABELS[task.section]}</span> : null}</div>{task.description ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-400">{task.description}</p> : null}<div className="mt-3 flex flex-wrap gap-3 text-[11px] text-slate-600">{task.sourceId ? <span>Source: {task.sourceId}</span> : null}{task.dueDate ? <span>Due: {task.dueDate}</span> : null}</div></div>
+                <div className="min-w-0"><div className="flex flex-wrap items-center gap-2">{task.status === "done" ? <CheckCircle2 size={16} className="text-emerald-400" /> : task.status === "blocked" ? <CircleAlert size={16} className="text-red-400" /> : <ListTodo size={16} className="text-blue-400" />}<h3 className="font-semibold">{task.title}</h3><span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{task.priority}</span>{task.section ? <span className="rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] text-slate-500">{SECTION_LABELS[task.section]}</span> : null}</div>{task.description ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-400">{task.description}</p> : null}<div className="mt-3 flex flex-wrap gap-3 text-[11px] text-slate-600">{task.sourceId ? <span>Source: {task.sourceId}</span> : null}{task.dueDate ? <span className={task.status !== "done" && task.dueDate < new Date().toLocaleDateString("en-CA") ? "font-semibold text-red-300" : ""}>{task.status !== "done" && task.dueDate < new Date().toLocaleDateString("en-CA") ? "Overdue · " : "Due: "}{task.dueDate}</span> : null}</div></div>
                 <div className="flex items-center gap-2"><select value={task.status} onChange={(e) => void changeStatus(task, e.target.value as ProjectExecutionTaskStatus)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">{Object.entries(STATUS_META).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><button onClick={() => startEditing(task)} className="rounded-lg border border-slate-800 p-2 text-slate-500 hover:border-blue-900 hover:text-blue-400" title="Edit task"><Pencil size={15} /></button><button onClick={() => void removeTask(task)} className="rounded-lg border border-slate-800 p-2 text-slate-500 hover:border-red-900 hover:text-red-400" title="Delete task"><Trash2 size={15} /></button></div>
               </div>
             </article>
