@@ -74,8 +74,8 @@ export async function seedProjectDemoData(project: Project, ownerId: string) {
     await createProjectApiContract({ projectId: project.id, ownerId, method: "GET", path: "/api/v1/projects/:projectId/health", title: `${DEMO_PREFIX} Project health summary`, description: "Returns project-scoped engineering progress and architecture health for the authenticated owner." });
     results.push("api");
   }
-  if (!hasDemoRecord(await listProjectDatabaseEntities(project.id, ownerId))) {
-    await createProjectDatabaseEntity({ projectId: project.id, ownerId, name: `${DEMO_PREFIX} project_memberships`, purpose: "Maps authenticated users to project roles and enforces workspace ownership boundaries." });
+  if (!(await listProjectDatabaseEntities(project.id, ownerId)).some((item) => item.name === "demo_project_memberships")) {
+    await createProjectDatabaseEntity({ projectId: project.id, ownerId, name: "demo_project_memberships", purpose: "Maps authenticated users to project roles and enforces workspace ownership boundaries." });
     results.push("database");
   }
   if (!hasDemoRecord(await listProjectInfrastructureResources(project.id, ownerId))) {
