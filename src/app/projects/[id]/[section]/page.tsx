@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, updateProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, updateProjectDatabaseEntity, createProjectDesignDecision, updateProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, updateProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, updateProjectDatabaseEntity, createProjectDesignDecision, updateProjectDesignDecision, createProjectInfrastructureResource, updateProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
 import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectTestCase, type ProjectTestStatus, type ProjectTestType, type ProjectDocumentationEntry, type ProjectDocumentationStatus, type ProjectDocumentationType, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
@@ -76,6 +76,9 @@ export default function ProjectSectionPage() {
   const [infrastructureResources, setInfrastructureResources] = useState<ProjectInfrastructureResource[]>([]);
   const [newInfrastructureResource, setNewInfrastructureResource] = useState<{ name: string; provider: string; environment: ProjectInfrastructureEnvironment; purpose: string }>({ name: "", provider: "", environment: "development", purpose: "" });
   const [savingInfrastructureResource, setSavingInfrastructureResource] = useState(false);
+  const [editingInfrastructureResourceId, setEditingInfrastructureResourceId] = useState<string | null>(null);
+  const [editingInfrastructureResource, setEditingInfrastructureResource] = useState<{ name: string; provider: string; environment: ProjectInfrastructureEnvironment; purpose: string }>({ name: "", provider: "", environment: "development", purpose: "" });
+  const [savingInfrastructureResourceEdit, setSavingInfrastructureResourceEdit] = useState(false);
   const [codeArtifacts, setCodeArtifacts] = useState<ProjectCodeArtifact[]>([]);
   const [newCodeArtifact, setNewCodeArtifact] = useState({ name: "", language: "", runtime: "", path: "", purpose: "" });
   const [savingCodeArtifact, setSavingCodeArtifact] = useState(false);
@@ -466,35 +469,62 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No infrastructure resources defined yet.</div>
                   ) : infrastructureResources.map((resource) => (
                     <div key={resource.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-semibold">{resource.name}</h3>
-                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500">{resource.environment}</span>
-                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] text-slate-400">{resource.provider}</span>
+                      {editingInfrastructureResourceId === resource.id ? (
+                        <div className="space-y-3">
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <input value={editingInfrastructureResource.name} onChange={(e) => setEditingInfrastructureResource((v) => ({ ...v, name: e.target.value }))} maxLength={160} aria-label="Resource name" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                            <input value={editingInfrastructureResource.provider} onChange={(e) => setEditingInfrastructureResource((v) => ({ ...v, provider: e.target.value }))} maxLength={100} aria-label="Infrastructure provider" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                            <select value={editingInfrastructureResource.environment} onChange={(e) => setEditingInfrastructureResource((v) => ({ ...v, environment: e.target.value as ProjectInfrastructureEnvironment }))} aria-label="Environment" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm"><option value="development">Development</option><option value="staging">Staging</option><option value="production">Production</option><option value="shared">Shared</option></select>
+                            <textarea value={editingInfrastructureResource.purpose} onChange={(e) => setEditingInfrastructureResource((v) => ({ ...v, purpose: e.target.value }))} maxLength={2000} rows={3} aria-label="Resource purpose" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm md:col-span-2" />
                           </div>
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{resource.purpose || "No purpose documented."}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={savingInfrastructureResourceEdit || !editingInfrastructureResource.name.trim() || !editingInfrastructureResource.provider.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingInfrastructureResourceEdit(true); setError(null);
+                              try {
+                                await updateProjectInfrastructureResource({ projectId: project.id, resourceId: resource.id, ownerId: user.uid, ...editingInfrastructureResource });
+                                setInfrastructureResources((items) => items.map((current) => current.id === resource.id ? { ...current, ...editingInfrastructureResource, name: editingInfrastructureResource.name.trim(), provider: editingInfrastructureResource.provider.trim(), purpose: editingInfrastructureResource.purpose.trim() } : current));
+                                setEditingInfrastructureResourceId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Infrastructure resource could not be saved."); }
+                              finally { setSavingInfrastructureResourceEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingInfrastructureResourceEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingInfrastructureResourceId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
+                          </div>
                         </div>
-                        <select value={resource.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectInfrastructureResourceStatus;
-                          try {
-                            await updateProjectInfrastructureResourceStatus({ projectId: project.id, resourceId: resource.id, ownerId: user.uid, status });
-                            setInfrastructureResources((items) => items.map((item) => item.id === resource.id ? { ...item, status } : item));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Infrastructure resource status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="planned">Planned</option><option value="active">Active</option><option value="retired">Retired</option>
-                        </select>
-                        <button type="button" disabled={deletingRequirementId === resource.id} onClick={async () => {
-                          if (!user || !project || !window.confirm("Delete this infrastructure resource? This cannot be undone.")) return;
-                          setDeletingRequirementId(resource.id); setError(null);
-                          try {
-                            await deleteProjectEngineeringRecord({ projectId: project.id, recordId: resource.id, ownerId: user.uid, collectionName: "infrastructureResources" });
-                            setInfrastructureResources((items) => items.filter((current) => current.id !== resource.id));
-                          } catch (err) { setError(err instanceof Error ? err.message : "The infrastructure resource could not be deleted."); }
-                          finally { setDeletingRequirementId(null); }
-                        }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === resource.id ? "Deleting..." : "Delete"}</button>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-semibold">{resource.name}</h3>
+                              <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500">{resource.environment}</span>
+                              <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] text-slate-400">{resource.provider}</span>
+                            </div>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{resource.purpose || "No purpose documented."}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={resource.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectInfrastructureResourceStatus;
+                              try {
+                                await updateProjectInfrastructureResourceStatus({ projectId: project.id, resourceId: resource.id, ownerId: user.uid, status });
+                                setInfrastructureResources((items) => items.map((item) => item.id === resource.id ? { ...item, status } : item));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Infrastructure resource status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="planned">Planned</option><option value="active">Active</option><option value="retired">Retired</option>
+                            </select>
+                            <button onClick={() => { setEditingInfrastructureResourceId(resource.id); setEditingInfrastructureResource({ name: resource.name, provider: resource.provider, environment: resource.environment, purpose: resource.purpose }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === resource.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this infrastructure resource? This cannot be undone.")) return;
+                              setDeletingRequirementId(resource.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: resource.id, ownerId: user.uid, collectionName: "infrastructureResources" });
+                                setInfrastructureResources((items) => items.filter((current) => current.id !== resource.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The infrastructure resource could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === resource.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
