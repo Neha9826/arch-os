@@ -784,6 +784,34 @@ export async function createProjectDatabaseEntity(input: {
   return entityRef.id;
 }
 
+export async function updateProjectDatabaseEntity(input: {
+  projectId: string;
+  entityId: string;
+  ownerId: string;
+  name: string;
+  purpose: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const entityRef = doc(projectRef, PROJECT_DATABASE_SUBCOLLECTION, input.entityId);
+  const snapshot = await getDoc(entityRef);
+  if (!snapshot.exists()) throw new Error("Database entity not found.");
+  const existing = toProjectDatabaseEntity(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this database entity.");
+  }
+  const entity: ProjectDatabaseEntity = {
+    ...existing,
+    name: input.name.trim(),
+    purpose: input.purpose.trim(),
+  };
+  if (!isValidProjectDatabaseEntity(entity)) throw new Error("Invalid project database entity.");
+  await updateDoc(entityRef, {
+    name: entity.name,
+    purpose: entity.purpose,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function updateProjectDatabaseEntityStatus(input: {
   projectId: string;
   entityId: string;
