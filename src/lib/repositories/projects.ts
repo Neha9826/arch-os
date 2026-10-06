@@ -908,6 +908,42 @@ export async function createProjectInfrastructureResource(input: {
   return resourceRef.id;
 }
 
+export async function updateProjectInfrastructureResource(input: {
+  projectId: string;
+  resourceId: string;
+  ownerId: string;
+  name: string;
+  provider: string;
+  environment: ProjectInfrastructureEnvironment;
+  purpose: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const resourceRef = doc(projectRef, PROJECT_INFRASTRUCTURE_SUBCOLLECTION, input.resourceId);
+  const snapshot = await getDoc(resourceRef);
+  if (!snapshot.exists()) throw new Error("Infrastructure resource not found.");
+  const existing = toProjectInfrastructureResource(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this infrastructure resource.");
+  }
+  const resource: ProjectInfrastructureResource = {
+    ...existing,
+    name: input.name.trim(),
+    provider: input.provider.trim(),
+    environment: input.environment,
+    purpose: input.purpose.trim(),
+  };
+  if (!isValidProjectInfrastructureResource(resource)) {
+    throw new Error("Invalid project infrastructure resource.");
+  }
+  await updateDoc(resourceRef, {
+    name: resource.name,
+    provider: resource.provider,
+    environment: resource.environment,
+    purpose: resource.purpose,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function updateProjectInfrastructureResourceStatus(input: {
   projectId: string;
   resourceId: string;
