@@ -407,6 +407,25 @@ function toProjectMilestone(id: string, data: Record<string, unknown>): ProjectM
   };
 }
 
+export type ProjectEngineeringCollection = "roadmap" | "designDecisions" | "apiContracts" | "databaseEntities" | "infrastructureResources" | "codeArtifacts" | "testCases" | "documentation";
+
+export async function deleteProjectEngineeringRecord(input: {
+  projectId: string;
+  recordId: string;
+  ownerId: string;
+  collectionName: ProjectEngineeringCollection;
+}): Promise<void> {
+  await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const reference = doc(db, PROJECTS_COLLECTION, input.projectId, input.collectionName, input.recordId);
+  const snapshot = await getDoc(reference);
+  if (!snapshot.exists()) throw new Error("Engineering record was not found.");
+  const data = snapshot.data();
+  if (data.ownerId !== input.ownerId || data.projectId !== input.projectId) {
+    throw new Error("You do not have permission to delete this engineering record.");
+  }
+  await deleteDoc(reference);
+}
+
 async function assertActiveProjectOwner(projectId: string, ownerId: string) {
   const projectRef = doc(db, PROJECTS_COLLECTION, projectId);
   const snapshot = await getDoc(projectRef);
