@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Activity, AlertTriangle, ArrowLeft, CheckCircle2, CircleAlert, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getProject } from "@/lib/repositories/projects";
-import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
+import { listArchitecturesForProject } from "@/lib/repositories/architectures";
 import {
   buildProjectArchitectureHealth,
   type ProjectArchitectureHealth,
@@ -160,7 +160,7 @@ export default function ProjectArchitectureHealthPage() {
           <div className="mb-4 flex items-end justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold">Architecture health by artifact</h2>
-              <p className="mt-1 text-sm text-slate-500">Scores and findings are calculated from each architecture's canonical Architecture IR.</p>
+              <p className="mt-1 text-sm text-slate-500">Scores and findings are calculated from each architecture&apos;s canonical Architecture IR.</p>
             </div>
             <div className="text-xs text-slate-500">
               {health.totalErrors} errors · {health.totalWarnings} warnings
