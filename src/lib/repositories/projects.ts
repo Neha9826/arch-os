@@ -1,6 +1,8 @@
 import {
   collection,
   doc,
+  deleteDoc,
+  deleteField,
   getDoc,
   getDocs,
   query,
@@ -141,7 +143,7 @@ export async function createProject(input: {
     ownerId: input.ownerId,
     createdBy: input.createdBy,
     name: input.name.trim(),
-    description: input.description?.trim() || undefined,
+    description: input.description?.trim() ?? "",
     status: "active",
     sections: createDefaultProjectSections(),
   };
@@ -180,7 +182,7 @@ export async function updateProject(input: {
 
   await updateDoc(doc(db, PROJECTS_COLLECTION, input.projectId), {
     name: input.name.trim(),
-    description: input.description?.trim() || undefined,
+    description: input.description?.trim() ?? "",
     status: input.status,
     updatedAt: serverTimestamp(),
   });
@@ -341,6 +343,54 @@ export async function updateProjectRequirementStatus(input: {
   await updateDoc(requirementRef, { status: input.status, updatedAt: serverTimestamp() });
 }
 
+export async function updateProjectRequirement(input: {
+  projectId: string;
+  requirementId: string;
+  ownerId: string;
+  title: string;
+  description?: string;
+  priority: ProjectRequirementPriority;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const requirementRef = doc(projectRef, PROJECT_REQUIREMENTS_SUBCOLLECTION, input.requirementId);
+  const snapshot = await getDoc(requirementRef);
+  if (!snapshot.exists()) throw new Error("Requirement not found.");
+
+  const existing = toProjectRequirement(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId) throw new Error("You do not have access to this requirement.");
+
+  const requirement: ProjectRequirement = {
+    ...existing,
+    title: input.title.trim(),
+    description: input.description?.trim() || undefined,
+    priority: input.priority,
+  };
+  if (!isValidProjectRequirement(requirement)) throw new Error("Invalid project requirement.");
+
+  await updateDoc(requirementRef, {
+    title: requirement.title,
+    description: requirement.description ?? "",
+    priority: requirement.priority,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteProjectRequirement(input: {
+  projectId: string;
+  requirementId: string;
+  ownerId: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const requirementRef = doc(projectRef, PROJECT_REQUIREMENTS_SUBCOLLECTION, input.requirementId);
+  const snapshot = await getDoc(requirementRef);
+  if (!snapshot.exists()) throw new Error("Requirement not found.");
+
+  const requirement = toProjectRequirement(snapshot.id, snapshot.data());
+  if (requirement.ownerId !== input.ownerId) throw new Error("You do not have access to this requirement.");
+
+  await deleteDoc(requirementRef);
+}
+
 
 const PROJECT_ROADMAP_SUBCOLLECTION = "roadmap";
 
@@ -356,6 +406,25 @@ function toProjectMilestone(id: string, data: Record<string, unknown>): ProjectM
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };
+}
+
+export type ProjectEngineeringCollection = "roadmap" | "designDecisions" | "apiContracts" | "databaseEntities" | "infrastructureResources" | "codeArtifacts" | "testCases" | "documentation";
+
+export async function deleteProjectEngineeringRecord(input: {
+  projectId: string;
+  recordId: string;
+  ownerId: string;
+  collectionName: ProjectEngineeringCollection;
+}): Promise<void> {
+  await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const reference = doc(db, PROJECTS_COLLECTION, input.projectId, input.collectionName, input.recordId);
+  const snapshot = await getDoc(reference);
+  if (!snapshot.exists()) throw new Error("Engineering record was not found.");
+  const data = snapshot.data();
+  if (data.ownerId !== input.ownerId || data.projectId !== input.projectId) {
+    throw new Error("You do not have permission to delete this engineering record.");
+  }
+  await deleteDoc(reference);
 }
 
 async function assertActiveProjectOwner(projectId: string, ownerId: string) {
@@ -404,6 +473,37 @@ export async function createProjectMilestone(input: {
     updatedAt: serverTimestamp(),
   });
   return milestoneRef.id;
+}
+
+export async function updateProjectMilestone(input: {
+  projectId: string;
+  milestoneId: string;
+  ownerId: string;
+  title: string;
+  description?: string;
+  targetDate?: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const milestoneRef = doc(projectRef, PROJECT_ROADMAP_SUBCOLLECTION, input.milestoneId);
+  const snapshot = await getDoc(milestoneRef);
+  if (!snapshot.exists()) throw new Error("Milestone not found.");
+  const existing = toProjectMilestone(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this milestone.");
+  }
+  const milestone: ProjectMilestone = {
+    ...existing,
+    title: input.title.trim(),
+    description: input.description?.trim() || undefined,
+    targetDate: input.targetDate || undefined,
+  };
+  if (!isValidProjectMilestone(milestone)) throw new Error("Invalid project milestone.");
+  await updateDoc(milestoneRef, {
+    title: milestone.title,
+    description: milestone.description ?? "",
+    ...(milestone.targetDate ? { targetDate: milestone.targetDate } : { targetDate: deleteField() }),
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function updateProjectMilestoneStatus(input: {
@@ -475,6 +575,37 @@ export async function createProjectDesignDecision(input: {
     updatedAt: serverTimestamp(),
   });
   return decisionRef.id;
+}
+
+export async function updateProjectDesignDecision(input: {
+  projectId: string;
+  decisionId: string;
+  ownerId: string;
+  title: string;
+  decision: string;
+  rationale: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const decisionRef = doc(projectRef, PROJECT_DESIGN_SUBCOLLECTION, input.decisionId);
+  const snapshot = await getDoc(decisionRef);
+  if (!snapshot.exists()) throw new Error("Design decision not found.");
+  const existing = toProjectDesignDecision(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this design decision.");
+  }
+  const decision: ProjectDesignDecision = {
+    ...existing,
+    title: input.title.trim(),
+    decision: input.decision.trim(),
+    rationale: input.rationale.trim(),
+  };
+  if (!isValidProjectDesignDecision(decision)) throw new Error("Invalid project design decision.");
+  await updateDoc(decisionRef, {
+    title: decision.title,
+    decision: decision.decision,
+    rationale: decision.rationale,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function updateProjectDesignDecisionStatus(input: {
@@ -552,6 +683,40 @@ export async function createProjectApiContract(input: {
   return contractRef.id;
 }
 
+export async function updateProjectApiContract(input: {
+  projectId: string;
+  contractId: string;
+  ownerId: string;
+  method: ProjectApiMethod;
+  path: string;
+  title: string;
+  description?: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const contractRef = doc(projectRef, PROJECT_API_SUBCOLLECTION, input.contractId);
+  const snapshot = await getDoc(contractRef);
+  if (!snapshot.exists()) throw new Error("API contract not found.");
+  const existing = toProjectApiContract(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this API contract.");
+  }
+  const contract: ProjectApiContract = {
+    ...existing,
+    method: input.method,
+    path: input.path.trim(),
+    title: input.title.trim(),
+    description: input.description?.trim() || undefined,
+  };
+  if (!isValidProjectApiContract(contract)) throw new Error("Invalid project API contract.");
+  await updateDoc(contractRef, {
+    method: contract.method,
+    path: contract.path,
+    title: contract.title,
+    description: contract.description ?? "",
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function updateProjectApiContractStatus(input: {
   projectId: string;
   contractId: string;
@@ -617,6 +782,34 @@ export async function createProjectDatabaseEntity(input: {
     updatedAt: serverTimestamp(),
   });
   return entityRef.id;
+}
+
+export async function updateProjectDatabaseEntity(input: {
+  projectId: string;
+  entityId: string;
+  ownerId: string;
+  name: string;
+  purpose: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const entityRef = doc(projectRef, PROJECT_DATABASE_SUBCOLLECTION, input.entityId);
+  const snapshot = await getDoc(entityRef);
+  if (!snapshot.exists()) throw new Error("Database entity not found.");
+  const existing = toProjectDatabaseEntity(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this database entity.");
+  }
+  const entity: ProjectDatabaseEntity = {
+    ...existing,
+    name: input.name.trim(),
+    purpose: input.purpose.trim(),
+  };
+  if (!isValidProjectDatabaseEntity(entity)) throw new Error("Invalid project database entity.");
+  await updateDoc(entityRef, {
+    name: entity.name,
+    purpose: entity.purpose,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function updateProjectDatabaseEntityStatus(input: {
@@ -713,6 +906,42 @@ export async function createProjectInfrastructureResource(input: {
   });
 
   return resourceRef.id;
+}
+
+export async function updateProjectInfrastructureResource(input: {
+  projectId: string;
+  resourceId: string;
+  ownerId: string;
+  name: string;
+  provider: string;
+  environment: ProjectInfrastructureEnvironment;
+  purpose: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const resourceRef = doc(projectRef, PROJECT_INFRASTRUCTURE_SUBCOLLECTION, input.resourceId);
+  const snapshot = await getDoc(resourceRef);
+  if (!snapshot.exists()) throw new Error("Infrastructure resource not found.");
+  const existing = toProjectInfrastructureResource(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this infrastructure resource.");
+  }
+  const resource: ProjectInfrastructureResource = {
+    ...existing,
+    name: input.name.trim(),
+    provider: input.provider.trim(),
+    environment: input.environment,
+    purpose: input.purpose.trim(),
+  };
+  if (!isValidProjectInfrastructureResource(resource)) {
+    throw new Error("Invalid project infrastructure resource.");
+  }
+  await updateDoc(resourceRef, {
+    name: resource.name,
+    provider: resource.provider,
+    environment: resource.environment,
+    purpose: resource.purpose,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function updateProjectInfrastructureResourceStatus(input: {
@@ -821,6 +1050,43 @@ export async function createProjectCodeArtifact(input: {
   return artifactRef.id;
 }
 
+export async function updateProjectCodeArtifact(input: {
+  projectId: string;
+  artifactId: string;
+  ownerId: string;
+  name: string;
+  language: string;
+  runtime: string;
+  path: string;
+  purpose: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const artifactRef = doc(projectRef, PROJECT_CODE_SUBCOLLECTION, input.artifactId);
+  const snapshot = await getDoc(artifactRef);
+  if (!snapshot.exists()) throw new Error("Code artifact not found.");
+  const existing = toProjectCodeArtifact(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this code artifact.");
+  }
+  const artifact: ProjectCodeArtifact = {
+    ...existing,
+    name: input.name.trim(),
+    language: input.language.trim(),
+    runtime: input.runtime.trim(),
+    path: input.path.trim(),
+    purpose: input.purpose.trim(),
+  };
+  if (!isValidProjectCodeArtifact(artifact)) throw new Error("Invalid project code artifact.");
+  await updateDoc(artifactRef, {
+    name: artifact.name,
+    language: artifact.language,
+    runtime: artifact.runtime,
+    path: artifact.path,
+    purpose: artifact.purpose,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function updateProjectCodeArtifactStatus(input: {
   projectId: string;
   artifactId: string;
@@ -917,6 +1183,40 @@ export async function createProjectTestCase(input: {
   return testRef.id;
 }
 
+export async function updateProjectTestCase(input: {
+  projectId: string;
+  testCaseId: string;
+  ownerId: string;
+  name: string;
+  type: ProjectTestType;
+  path: string;
+  purpose: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const testRef = doc(projectRef, PROJECT_TESTS_SUBCOLLECTION, input.testCaseId);
+  const snapshot = await getDoc(testRef);
+  if (!snapshot.exists()) throw new Error("Project test case not found.");
+  const existing = toProjectTestCase(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this project test case.");
+  }
+  const testCase: ProjectTestCase = {
+    ...existing,
+    name: input.name.trim(),
+    type: input.type,
+    path: input.path.trim(),
+    purpose: input.purpose.trim(),
+  };
+  if (!isValidProjectTestCase(testCase)) throw new Error("Invalid project test case.");
+  await updateDoc(testRef, {
+    name: testCase.name,
+    type: testCase.type,
+    path: testCase.path,
+    purpose: testCase.purpose,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function updateProjectTestCaseStatus(input: {
   projectId: string;
   testCaseId: string;
@@ -1000,6 +1300,40 @@ export async function createProjectDocumentation(input: {
     updatedAt: serverTimestamp(),
   });
   return documentationRef.id;
+}
+
+export async function updateProjectDocumentation(input: {
+  projectId: string;
+  documentationId: string;
+  ownerId: string;
+  title: string;
+  type: ProjectDocumentationType;
+  path: string;
+  summary: string;
+}): Promise<void> {
+  const projectRef = await assertActiveProjectOwner(input.projectId, input.ownerId);
+  const documentationRef = doc(projectRef, PROJECT_DOCUMENTATION_SUBCOLLECTION, input.documentationId);
+  const snapshot = await getDoc(documentationRef);
+  if (!snapshot.exists()) throw new Error("Project documentation entry not found.");
+  const existing = toProjectDocumentationEntry(snapshot.id, snapshot.data());
+  if (existing.ownerId !== input.ownerId || existing.projectId !== input.projectId) {
+    throw new Error("You do not have access to this project documentation entry.");
+  }
+  const entry: ProjectDocumentationEntry = {
+    ...existing,
+    title: input.title.trim(),
+    type: input.type,
+    path: input.path.trim(),
+    summary: input.summary.trim(),
+  };
+  if (!isValidProjectDocumentationEntry(entry)) throw new Error("Invalid project documentation entry.");
+  await updateDoc(documentationRef, {
+    title: entry.title,
+    type: entry.type,
+    path: entry.path,
+    summary: entry.summary,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function updateProjectDocumentationStatus(input: {

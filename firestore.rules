@@ -93,6 +93,10 @@ service cloud.firestore {
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120
         && request.resource.data.status in ["active", "archived"]
+        && (!request.resource.data.keys().hasAny(["description"])
+          || (request.resource.data.description is string
+            && request.resource.data.description.size() <= 1000))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "description", "status", "sections", "planning", "updatedAt"])
         && request.resource.data.sections is map
         && request.resource.data.sections.keys().size() == 11
         && request.resource.data.sections.keys().hasAll([
@@ -129,7 +133,7 @@ service cloud.firestore {
 
       allow create: if isParentProjectOwner()
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active"
-        && request.resource.data.keys().hasOnly(["projectId", "ownerId", "title", "description", "priority", "status", "section", "sourceId", "dueDate", "createdAt", "updatedAt"])
+        && request.resource.data.keys().hasOnly(["projectId", "ownerId", "name", "purpose", "status", "createdAt", "updatedAt"])
         && request.resource.data.projectId == projectId
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.name is string
@@ -140,19 +144,22 @@ service cloud.firestore {
         && request.resource.data.status == "draft";
 
       allow update: if isParentProjectOwner()
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active"
         && resource.data.projectId == projectId
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.projectId == resource.data.projectId
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.title == resource.data.title
-        && request.resource.data.description == resource.data.description
-        && request.resource.data.priority == resource.data.priority
-        && request.resource.data.section == resource.data.section
-        && request.resource.data.sourceId == resource.data.sourceId
-        && request.resource.data.dueDate == resource.data.dueDate
-        && request.resource.data.status in ["todo", "in-progress", "blocked", "done"]
-        && request.resource.data.keys().hasOnly(["projectId", "ownerId", "title", "description", "priority", "status", "section", "sourceId", "dueDate", "createdAt", "updatedAt"])
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "updatedAt"])
+        && request.resource.data.name is string
+        && request.resource.data.name.matches("^[A-Za-z_][A-Za-z0-9_]*$")
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.purpose is string
+        && request.resource.data.purpose.size() <= 2000
+        && request.resource.data.status in ["draft", "active", "deprecated"]
+        && request.resource.data.keys().hasOnly(["projectId", "ownerId", "name", "purpose", "status", "createdAt", "updatedAt"])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "purpose", "status", "updatedAt"]);
+
+      allow delete: if isParentProjectOwner()
+        && resource.data.ownerId == request.auth.uid
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner() && resource.data.ownerId == request.auth.uid
@@ -188,11 +195,16 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.projectId == resource.data.projectId
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.method == resource.data.method
-        && request.resource.data.path == resource.data.path
-        && request.resource.data.title == resource.data.title
-        && request.resource.data.description == resource.data.description
+        && request.resource.data.method in ["GET", "POST", "PUT", "PATCH", "DELETE"]
+        && request.resource.data.path is string
+        && request.resource.data.path.matches("^/.*")
+        && request.resource.data.path.size() <= 300
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200
+        && (!request.resource.data.keys().hasAll(["description"]) || (request.resource.data.description is string && request.resource.data.description.size() <= 2000))
         && request.resource.data.status in ["draft", "active", "deprecated"]
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["method", "path", "title", "description", "status", "updatedAt"])
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner() && resource.data.ownerId == request.auth.uid
@@ -227,10 +239,16 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.projectId == resource.data.projectId
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.title == resource.data.title
-        && request.resource.data.decision == resource.data.decision
-        && request.resource.data.rationale == resource.data.rationale
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200
+        && request.resource.data.decision is string
+        && request.resource.data.decision.size() > 0
+        && request.resource.data.decision.size() <= 5000
+        && request.resource.data.rationale is string
+        && request.resource.data.rationale.size() <= 5000
         && request.resource.data.status in ["proposed", "accepted", "superseded"]
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["title", "decision", "rationale", "status", "updatedAt"])
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner() && resource.data.ownerId == request.auth.uid
@@ -264,10 +282,13 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.projectId == resource.data.projectId
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.title == resource.data.title
-        && request.resource.data.description == resource.data.description
-        && request.resource.data.targetDate == resource.data.targetDate
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200
+        && (!request.resource.data.keys().hasAll(["description"]) || (request.resource.data.description is string && request.resource.data.description.size() <= 2000))
+        && (!request.resource.data.keys().hasAll(["targetDate"]) || (request.resource.data.targetDate is string && request.resource.data.targetDate.matches("^\\d{4}-\\d{2}-\\d{2}$")))
         && request.resource.data.status in ["planned", "in-progress", "done"]
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["title", "description", "targetDate", "status", "updatedAt"])
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner() && resource.data.ownerId == request.auth.uid
@@ -300,10 +321,14 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.projectId == resource.data.projectId
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.title == resource.data.title
-        && request.resource.data.description == resource.data.description
-        && request.resource.data.priority == resource.data.priority
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200
+        && (!request.resource.data.keys().hasAll(["description"]) || request.resource.data.description is string)
+        && (!request.resource.data.keys().hasAll(["description"]) || request.resource.data.description.size() <= 2000)
+        && request.resource.data.priority in ["low", "medium", "high", "critical"]
         && request.resource.data.status in ["todo", "in-progress", "done"]
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["title", "description", "priority", "status", "updatedAt"])
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner()
@@ -340,11 +365,17 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.projectId == resource.data.projectId
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.name == resource.data.name
-        && request.resource.data.provider == resource.data.provider
-        && request.resource.data.environment == resource.data.environment
-        && request.resource.data.purpose == resource.data.purpose
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 160
+        && request.resource.data.provider is string
+        && request.resource.data.provider.size() > 0
+        && request.resource.data.provider.size() <= 100
+        && request.resource.data.environment in ["development", "staging", "production", "shared"]
+        && request.resource.data.purpose is string
+        && request.resource.data.purpose.size() <= 2000
         && request.resource.data.status in ["planned", "active", "retired"]
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "provider", "environment", "purpose", "status", "updatedAt"])
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner()
@@ -385,12 +416,21 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.projectId == resource.data.projectId
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.name == resource.data.name
-        && request.resource.data.language == resource.data.language
-        && request.resource.data.runtime == resource.data.runtime
-        && request.resource.data.path == resource.data.path
-        && request.resource.data.purpose == resource.data.purpose
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 160
+        && request.resource.data.language is string
+        && request.resource.data.language.size() > 0
+        && request.resource.data.language.size() <= 100
+        && request.resource.data.runtime is string
+        && request.resource.data.runtime.size() <= 100
+        && request.resource.data.path is string
+        && request.resource.data.path.size() > 0
+        && request.resource.data.path.size() <= 500
+        && request.resource.data.purpose is string
+        && request.resource.data.purpose.size() <= 2000
         && request.resource.data.status in ["planned", "active", "deprecated"]
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "language", "runtime", "path", "purpose", "status", "updatedAt"])
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner()
@@ -427,11 +467,17 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.projectId == resource.data.projectId
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.title == resource.data.title
-        && request.resource.data.type == resource.data.type
-        && request.resource.data.path == resource.data.path
-        && request.resource.data.summary == resource.data.summary
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200
+        && request.resource.data.type in ["readme", "api", "architecture", "runbook", "decision", "guide", "other"]
+        && request.resource.data.path is string
+        && request.resource.data.path.size() > 0
+        && request.resource.data.path.size() <= 500
+        && request.resource.data.summary is string
+        && request.resource.data.summary.size() <= 2000
         && request.resource.data.status in ["planned", "draft", "published", "deprecated"]
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["title", "type", "path", "summary", "status", "updatedAt"])
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner()
@@ -468,11 +514,17 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.projectId == resource.data.projectId
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.name == resource.data.name
-        && request.resource.data.type == resource.data.type
-        && request.resource.data.path == resource.data.path
-        && request.resource.data.purpose == resource.data.purpose
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 200
+        && request.resource.data.type in ["unit", "integration", "e2e", "security", "performance", "other"]
+        && request.resource.data.path is string
+        && request.resource.data.path.size() > 0
+        && request.resource.data.path.size() <= 500
+        && request.resource.data.purpose is string
+        && request.resource.data.purpose.size() <= 2000
         && request.resource.data.status in ["planned", "passing", "failing", "skipped"]
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "type", "path", "purpose", "status", "updatedAt"])
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == "active";
 
       allow delete: if isParentProjectOwner()

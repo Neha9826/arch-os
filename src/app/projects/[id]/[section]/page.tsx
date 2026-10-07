@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, Circle, Clock3, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { createProjectApiContract, createProjectCodeArtifact, createProjectTestCase, createProjectDocumentation, createProjectDatabaseEntity, createProjectDesignDecision, createProjectInfrastructureResource, createProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, updateProjectApiContract, createProjectCodeArtifact, updateProjectCodeArtifact, createProjectTestCase, updateProjectTestCase, createProjectDocumentation, updateProjectDocumentation, createProjectDatabaseEntity, updateProjectDatabaseEntity, createProjectDesignDecision, updateProjectDesignDecision, createProjectInfrastructureResource, updateProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
 import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectTestCase, type ProjectTestStatus, type ProjectTestType, type ProjectDocumentationEntry, type ProjectDocumentationStatus, type ProjectDocumentationType, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
@@ -45,30 +45,58 @@ export default function ProjectSectionPage() {
   const [requirements, setRequirements] = useState<ProjectRequirement[]>([]);
   const [newRequirement, setNewRequirement] = useState({ title: "", description: "", priority: "medium" as ProjectRequirementPriority });
   const [savingRequirement, setSavingRequirement] = useState(false);
+  const [editingRequirementId, setEditingRequirementId] = useState<string | null>(null);
+  const [editingRequirement, setEditingRequirement] = useState({ title: "", description: "", priority: "medium" as ProjectRequirementPriority });
+  const [savingRequirementEdit, setSavingRequirementEdit] = useState(false);
+  const [deletingRequirementId, setDeletingRequirementId] = useState<string | null>(null);
   const [milestones, setMilestones] = useState<ProjectMilestone[]>([]);
   const [newMilestone, setNewMilestone] = useState({ title: "", description: "", targetDate: "" });
   const [savingMilestone, setSavingMilestone] = useState(false);
+  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
+  const [editingMilestone, setEditingMilestone] = useState({ title: "", description: "", targetDate: "" });
+  const [savingMilestoneEdit, setSavingMilestoneEdit] = useState(false);
   const [designDecisions, setDesignDecisions] = useState<ProjectDesignDecision[]>([]);
   const [newDesignDecision, setNewDesignDecision] = useState({ title: "", decision: "", rationale: "" });
   const [savingDesignDecision, setSavingDesignDecision] = useState(false);
+  const [editingDesignDecisionId, setEditingDesignDecisionId] = useState<string | null>(null);
+  const [editingDesignDecision, setEditingDesignDecision] = useState({ title: "", decision: "", rationale: "" });
+  const [savingDesignDecisionEdit, setSavingDesignDecisionEdit] = useState(false);
   const [apiContracts, setApiContracts] = useState<ProjectApiContract[]>([]);
   const [newApiContract, setNewApiContract] = useState({ method: "GET" as ProjectApiMethod, path: "", title: "", description: "" });
   const [savingApiContract, setSavingApiContract] = useState(false);
+  const [editingApiContractId, setEditingApiContractId] = useState<string | null>(null);
+  const [editingApiContract, setEditingApiContract] = useState({ method: "GET" as ProjectApiMethod, path: "", title: "", description: "" });
+  const [savingApiContractEdit, setSavingApiContractEdit] = useState(false);
   const [databaseEntities, setDatabaseEntities] = useState<ProjectDatabaseEntity[]>([]);
   const [newDatabaseEntity, setNewDatabaseEntity] = useState({ name: "", purpose: "" });
   const [savingDatabaseEntity, setSavingDatabaseEntity] = useState(false);
+  const [editingDatabaseEntityId, setEditingDatabaseEntityId] = useState<string | null>(null);
+  const [editingDatabaseEntity, setEditingDatabaseEntity] = useState({ name: "", purpose: "" });
+  const [savingDatabaseEntityEdit, setSavingDatabaseEntityEdit] = useState(false);
   const [infrastructureResources, setInfrastructureResources] = useState<ProjectInfrastructureResource[]>([]);
   const [newInfrastructureResource, setNewInfrastructureResource] = useState<{ name: string; provider: string; environment: ProjectInfrastructureEnvironment; purpose: string }>({ name: "", provider: "", environment: "development", purpose: "" });
   const [savingInfrastructureResource, setSavingInfrastructureResource] = useState(false);
+  const [editingInfrastructureResourceId, setEditingInfrastructureResourceId] = useState<string | null>(null);
+  const [editingInfrastructureResource, setEditingInfrastructureResource] = useState<{ name: string; provider: string; environment: ProjectInfrastructureEnvironment; purpose: string }>({ name: "", provider: "", environment: "development", purpose: "" });
+  const [savingInfrastructureResourceEdit, setSavingInfrastructureResourceEdit] = useState(false);
   const [codeArtifacts, setCodeArtifacts] = useState<ProjectCodeArtifact[]>([]);
   const [newCodeArtifact, setNewCodeArtifact] = useState({ name: "", language: "", runtime: "", path: "", purpose: "" });
   const [savingCodeArtifact, setSavingCodeArtifact] = useState(false);
+  const [editingCodeArtifactId, setEditingCodeArtifactId] = useState<string | null>(null);
+  const [editingCodeArtifact, setEditingCodeArtifact] = useState({ name: "", language: "", runtime: "", path: "", purpose: "" });
+  const [savingCodeArtifactEdit, setSavingCodeArtifactEdit] = useState(false);
   const [testCases, setTestCases] = useState<ProjectTestCase[]>([]);
   const [newTestCase, setNewTestCase] = useState({ name: "", type: "unit" as ProjectTestType, path: "", purpose: "" });
   const [savingTestCase, setSavingTestCase] = useState(false);
+  const [editingTestCaseId, setEditingTestCaseId] = useState<string | null>(null);
+  const [editingTestCase, setEditingTestCase] = useState({ name: "", type: "unit" as ProjectTestType, path: "", purpose: "" });
+  const [savingTestCaseEdit, setSavingTestCaseEdit] = useState(false);
   const [documentation, setDocumentation] = useState<ProjectDocumentationEntry[]>([]);
   const [newDocumentation, setNewDocumentation] = useState({ title: "", type: "readme" as ProjectDocumentationType, path: "", summary: "" });
   const [savingDocumentation, setSavingDocumentation] = useState(false);
+  const [editingDocumentationId, setEditingDocumentationId] = useState<string | null>(null);
+  const [editingDocumentation, setEditingDocumentation] = useState({ title: "", type: "readme" as ProjectDocumentationType, path: "", summary: "" });
+  const [savingDocumentationEdit, setSavingDocumentationEdit] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -259,26 +287,60 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No documentation entries defined yet.</div>
                   ) : documentation.map((item) => (
                     <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-semibold">{item.title}</h3>
-                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{item.type}</span>
+                      {editingDocumentationId === item.id ? (
+                        <div className="space-y-3">
+                          <input value={editingDocumentation.title} onChange={(e) => setEditingDocumentation((v) => ({ ...v, title: e.target.value }))} maxLength={200} aria-label="Document title" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <select value={editingDocumentation.type} onChange={(e) => setEditingDocumentation((v) => ({ ...v, type: e.target.value as ProjectDocumentationType }))} aria-label="Document type" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm"><option value="readme">README</option><option value="api">API</option><option value="architecture">Architecture</option><option value="runbook">Runbook</option><option value="decision">Decision</option><option value="guide">Guide</option><option value="other">Other</option></select>
+                          <input value={editingDocumentation.path} onChange={(e) => setEditingDocumentation((v) => ({ ...v, path: e.target.value }))} maxLength={500} aria-label="Document path" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <textarea value={editingDocumentation.summary} onChange={(e) => setEditingDocumentation((v) => ({ ...v, summary: e.target.value }))} maxLength={2000} rows={3} aria-label="Document summary" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={savingDocumentationEdit || !editingDocumentation.title.trim() || !editingDocumentation.path.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingDocumentationEdit(true); setError(null);
+                              try {
+                                await updateProjectDocumentation({ projectId: project.id, documentationId: item.id, ownerId: user.uid, ...editingDocumentation });
+                                setDocumentation((items) => items.map((current) => current.id === item.id ? { ...current, ...editingDocumentation, title: editingDocumentation.title.trim(), path: editingDocumentation.path.trim(), summary: editingDocumentation.summary.trim() } : current));
+                                setEditingDocumentationId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Documentation entry could not be saved."); }
+                              finally { setSavingDocumentationEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingDocumentationEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingDocumentationId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
                           </div>
-                          <p className="mt-2 font-mono text-xs text-slate-500">{item.path}</p>
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{item.summary || "No summary documented."}</p>
                         </div>
-                        <select value={item.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectDocumentationStatus;
-                          try {
-                            await updateProjectDocumentationStatus({ projectId: project.id, documentationId: item.id, ownerId: user.uid, status });
-                            setDocumentation((items) => items.map((current) => current.id === item.id ? { ...current, status } : current));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Documentation status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="planned">Planned</option><option value="draft">Draft</option><option value="published">Published</option><option value="deprecated">Deprecated</option>
-                        </select>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-semibold">{item.title}</h3>
+                              <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{item.type}</span>
+                            </div>
+                            <p className="mt-2 font-mono text-xs text-slate-500">{item.path}</p>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{item.summary || "No summary documented."}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={item.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectDocumentationStatus;
+                              try {
+                                await updateProjectDocumentationStatus({ projectId: project.id, documentationId: item.id, ownerId: user.uid, status });
+                                setDocumentation((items) => items.map((current) => current.id === item.id ? { ...current, status } : current));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Documentation status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="planned">Planned</option><option value="draft">Draft</option><option value="published">Published</option><option value="deprecated">Deprecated</option>
+                            </select>
+                            <button onClick={() => { setEditingDocumentationId(item.id); setEditingDocumentation({ title: item.title, type: item.type, path: item.path, summary: item.summary }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === item.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this document? This cannot be undone.")) return;
+                              setDeletingRequirementId(item.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: item.id, ownerId: user.uid, collectionName: "documentation" });
+                                setDocumentation((items) => items.filter((current) => current.id !== item.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The document could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === item.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -314,26 +376,60 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No test areas defined yet.</div>
                   ) : testCases.map((testCase) => (
                     <div key={testCase.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-semibold">{testCase.name}</h3>
-                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{testCase.type}</span>
+                      {editingTestCaseId === testCase.id ? (
+                        <div className="space-y-3">
+                          <input value={editingTestCase.name} onChange={(e) => setEditingTestCase((v) => ({ ...v, name: e.target.value }))} maxLength={200} aria-label="Test area name" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <select value={editingTestCase.type} onChange={(e) => setEditingTestCase((v) => ({ ...v, type: e.target.value as ProjectTestType }))} aria-label="Test type" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm"><option value="unit">Unit</option><option value="integration">Integration</option><option value="e2e">E2E</option><option value="security">Security</option><option value="performance">Performance</option><option value="other">Other</option></select>
+                          <input value={editingTestCase.path} onChange={(e) => setEditingTestCase((v) => ({ ...v, path: e.target.value }))} maxLength={500} aria-label="Test file path" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <textarea value={editingTestCase.purpose} onChange={(e) => setEditingTestCase((v) => ({ ...v, purpose: e.target.value }))} maxLength={2000} rows={3} aria-label="Test purpose" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={savingTestCaseEdit || !editingTestCase.name.trim() || !editingTestCase.path.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingTestCaseEdit(true); setError(null);
+                              try {
+                                await updateProjectTestCase({ projectId: project.id, testCaseId: testCase.id, ownerId: user.uid, ...editingTestCase });
+                                setTestCases((items) => items.map((current) => current.id === testCase.id ? { ...current, ...editingTestCase, name: editingTestCase.name.trim(), path: editingTestCase.path.trim(), purpose: editingTestCase.purpose.trim() } : current));
+                                setEditingTestCaseId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Test case could not be saved."); }
+                              finally { setSavingTestCaseEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingTestCaseEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingTestCaseId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
                           </div>
-                          <p className="mt-2 font-mono text-xs text-slate-500">{testCase.path}</p>
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{testCase.purpose || "No purpose documented."}</p>
                         </div>
-                        <select value={testCase.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectTestStatus;
-                          try {
-                            await updateProjectTestCaseStatus({ projectId: project.id, testCaseId: testCase.id, ownerId: user.uid, status });
-                            setTestCases((items) => items.map((item) => item.id === testCase.id ? { ...item, status } : item));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Test status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="planned">Planned</option><option value="passing">Passing</option><option value="failing">Failing</option><option value="skipped">Skipped</option>
-                        </select>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-semibold">{testCase.name}</h3>
+                              <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{testCase.type}</span>
+                            </div>
+                            <p className="mt-2 font-mono text-xs text-slate-500">{testCase.path}</p>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{testCase.purpose || "No purpose documented."}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={testCase.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectTestStatus;
+                              try {
+                                await updateProjectTestCaseStatus({ projectId: project.id, testCaseId: testCase.id, ownerId: user.uid, status });
+                                setTestCases((items) => items.map((item) => item.id === testCase.id ? { ...item, status } : item));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Test status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="planned">Planned</option><option value="passing">Passing</option><option value="failing">Failing</option><option value="skipped">Skipped</option>
+                            </select>
+                            <button onClick={() => { setEditingTestCaseId(testCase.id); setEditingTestCase({ name: testCase.name, type: testCase.type, path: testCase.path, purpose: testCase.purpose }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === testCase.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this test case? This cannot be undone.")) return;
+                              setDeletingRequirementId(testCase.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: testCase.id, ownerId: user.uid, collectionName: "testCases" });
+                                setTestCases((items) => items.filter((current) => current.id !== testCase.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The test case could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === testCase.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -368,27 +464,64 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No code artifacts defined yet.</div>
                   ) : codeArtifacts.map((artifact) => (
                     <div key={artifact.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-semibold">{artifact.name}</h3>
-                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{artifact.language}</span>
-                            {artifact.runtime && <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] text-slate-500">{artifact.runtime}</span>}
+                      {editingCodeArtifactId === artifact.id ? (
+                        <div className="space-y-3">
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <input value={editingCodeArtifact.name} onChange={(e) => setEditingCodeArtifact((v) => ({ ...v, name: e.target.value }))} maxLength={160} aria-label="Artifact name" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                            <input value={editingCodeArtifact.language} onChange={(e) => setEditingCodeArtifact((v) => ({ ...v, language: e.target.value }))} maxLength={100} aria-label="Artifact language" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                            <input value={editingCodeArtifact.runtime} onChange={(e) => setEditingCodeArtifact((v) => ({ ...v, runtime: e.target.value }))} maxLength={100} aria-label="Artifact runtime" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                            <input value={editingCodeArtifact.path} onChange={(e) => setEditingCodeArtifact((v) => ({ ...v, path: e.target.value }))} maxLength={500} aria-label="Artifact repository path" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                            <textarea value={editingCodeArtifact.purpose} onChange={(e) => setEditingCodeArtifact((v) => ({ ...v, purpose: e.target.value }))} maxLength={2000} rows={3} aria-label="Artifact purpose" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm md:col-span-2" />
                           </div>
-                          <p className="mt-2 font-mono text-xs text-slate-500">{artifact.path}</p>
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{artifact.purpose || "No purpose documented."}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={savingCodeArtifactEdit || !editingCodeArtifact.name.trim() || !editingCodeArtifact.language.trim() || !editingCodeArtifact.path.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingCodeArtifactEdit(true); setError(null);
+                              try {
+                                await updateProjectCodeArtifact({ projectId: project.id, artifactId: artifact.id, ownerId: user.uid, ...editingCodeArtifact });
+                                setCodeArtifacts((items) => items.map((current) => current.id === artifact.id ? { ...current, ...editingCodeArtifact, name: editingCodeArtifact.name.trim(), language: editingCodeArtifact.language.trim(), runtime: editingCodeArtifact.runtime.trim(), path: editingCodeArtifact.path.trim(), purpose: editingCodeArtifact.purpose.trim() } : current));
+                                setEditingCodeArtifactId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Code artifact could not be saved."); }
+                              finally { setSavingCodeArtifactEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingCodeArtifactEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingCodeArtifactId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
+                          </div>
                         </div>
-                        <select value={artifact.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectCodeArtifactStatus;
-                          try {
-                            await updateProjectCodeArtifactStatus({ projectId: project.id, artifactId: artifact.id, ownerId: user.uid, status });
-                            setCodeArtifacts((items) => items.map((item) => item.id === artifact.id ? { ...item, status } : item));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Code artifact status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="planned">Planned</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
-                        </select>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-semibold">{artifact.name}</h3>
+                              <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{artifact.language}</span>
+                              {artifact.runtime && <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] text-slate-500">{artifact.runtime}</span>}
+                            </div>
+                            <p className="mt-2 font-mono text-xs text-slate-500">{artifact.path}</p>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{artifact.purpose || "No purpose documented."}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={artifact.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectCodeArtifactStatus;
+                              try {
+                                await updateProjectCodeArtifactStatus({ projectId: project.id, artifactId: artifact.id, ownerId: user.uid, status });
+                                setCodeArtifacts((items) => items.map((item) => item.id === artifact.id ? { ...item, status } : item));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Code artifact status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="planned">Planned</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
+                            </select>
+                            <button onClick={() => { setEditingCodeArtifactId(artifact.id); setEditingCodeArtifact({ name: artifact.name, language: artifact.language, runtime: artifact.runtime, path: artifact.path, purpose: artifact.purpose }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === artifact.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this code artifact? This cannot be undone.")) return;
+                              setDeletingRequirementId(artifact.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: artifact.id, ownerId: user.uid, collectionName: "codeArtifacts" });
+                                setCodeArtifacts((items) => items.filter((current) => current.id !== artifact.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The code artifact could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === artifact.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -423,26 +556,62 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No infrastructure resources defined yet.</div>
                   ) : infrastructureResources.map((resource) => (
                     <div key={resource.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-semibold">{resource.name}</h3>
-                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500">{resource.environment}</span>
-                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] text-slate-400">{resource.provider}</span>
+                      {editingInfrastructureResourceId === resource.id ? (
+                        <div className="space-y-3">
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <input value={editingInfrastructureResource.name} onChange={(e) => setEditingInfrastructureResource((v) => ({ ...v, name: e.target.value }))} maxLength={160} aria-label="Resource name" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                            <input value={editingInfrastructureResource.provider} onChange={(e) => setEditingInfrastructureResource((v) => ({ ...v, provider: e.target.value }))} maxLength={100} aria-label="Infrastructure provider" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                            <select value={editingInfrastructureResource.environment} onChange={(e) => setEditingInfrastructureResource((v) => ({ ...v, environment: e.target.value as ProjectInfrastructureEnvironment }))} aria-label="Environment" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm"><option value="development">Development</option><option value="staging">Staging</option><option value="production">Production</option><option value="shared">Shared</option></select>
+                            <textarea value={editingInfrastructureResource.purpose} onChange={(e) => setEditingInfrastructureResource((v) => ({ ...v, purpose: e.target.value }))} maxLength={2000} rows={3} aria-label="Resource purpose" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm md:col-span-2" />
                           </div>
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{resource.purpose || "No purpose documented."}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={savingInfrastructureResourceEdit || !editingInfrastructureResource.name.trim() || !editingInfrastructureResource.provider.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingInfrastructureResourceEdit(true); setError(null);
+                              try {
+                                await updateProjectInfrastructureResource({ projectId: project.id, resourceId: resource.id, ownerId: user.uid, ...editingInfrastructureResource });
+                                setInfrastructureResources((items) => items.map((current) => current.id === resource.id ? { ...current, ...editingInfrastructureResource, name: editingInfrastructureResource.name.trim(), provider: editingInfrastructureResource.provider.trim(), purpose: editingInfrastructureResource.purpose.trim() } : current));
+                                setEditingInfrastructureResourceId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Infrastructure resource could not be saved."); }
+                              finally { setSavingInfrastructureResourceEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingInfrastructureResourceEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingInfrastructureResourceId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
+                          </div>
                         </div>
-                        <select value={resource.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectInfrastructureResourceStatus;
-                          try {
-                            await updateProjectInfrastructureResourceStatus({ projectId: project.id, resourceId: resource.id, ownerId: user.uid, status });
-                            setInfrastructureResources((items) => items.map((item) => item.id === resource.id ? { ...item, status } : item));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Infrastructure resource status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="planned">Planned</option><option value="active">Active</option><option value="retired">Retired</option>
-                        </select>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-semibold">{resource.name}</h3>
+                              <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500">{resource.environment}</span>
+                              <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] text-slate-400">{resource.provider}</span>
+                            </div>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{resource.purpose || "No purpose documented."}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={resource.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectInfrastructureResourceStatus;
+                              try {
+                                await updateProjectInfrastructureResourceStatus({ projectId: project.id, resourceId: resource.id, ownerId: user.uid, status });
+                                setInfrastructureResources((items) => items.map((item) => item.id === resource.id ? { ...item, status } : item));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Infrastructure resource status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="planned">Planned</option><option value="active">Active</option><option value="retired">Retired</option>
+                            </select>
+                            <button onClick={() => { setEditingInfrastructureResourceId(resource.id); setEditingInfrastructureResource({ name: resource.name, provider: resource.provider, environment: resource.environment, purpose: resource.purpose }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === resource.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this infrastructure resource? This cannot be undone.")) return;
+                              setDeletingRequirementId(resource.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: resource.id, ownerId: user.uid, collectionName: "infrastructureResources" });
+                                setInfrastructureResources((items) => items.filter((current) => current.id !== resource.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The infrastructure resource could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === resource.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -473,22 +642,54 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No database entities defined yet.</div>
                   ) : databaseEntities.map((entity) => (
                     <div key={entity.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div>
-                          <code className="text-sm text-blue-300">{entity.name}</code>
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{entity.purpose || "No purpose documented."}</p>
+                      {editingDatabaseEntityId === entity.id ? (
+                        <div className="space-y-3">
+                          <input value={editingDatabaseEntity.name} onChange={(e) => setEditingDatabaseEntity((v) => ({ ...v, name: e.target.value }))} maxLength={120} aria-label="Database entity name" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <textarea value={editingDatabaseEntity.purpose} onChange={(e) => setEditingDatabaseEntity((v) => ({ ...v, purpose: e.target.value }))} maxLength={2000} rows={3} aria-label="Database entity purpose" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={savingDatabaseEntityEdit || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(editingDatabaseEntity.name.trim())} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingDatabaseEntityEdit(true); setError(null);
+                              try {
+                                await updateProjectDatabaseEntity({ projectId: project.id, entityId: entity.id, ownerId: user.uid, ...editingDatabaseEntity });
+                                setDatabaseEntities((items) => items.map((current) => current.id === entity.id ? { ...current, name: editingDatabaseEntity.name.trim(), purpose: editingDatabaseEntity.purpose.trim() } : current));
+                                setEditingDatabaseEntityId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Database entity could not be saved."); }
+                              finally { setSavingDatabaseEntityEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingDatabaseEntityEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingDatabaseEntityId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
+                          </div>
                         </div>
-                        <select value={entity.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectDatabaseEntityStatus;
-                          try {
-                            await updateProjectDatabaseEntityStatus({ projectId: project.id, entityId: entity.id, ownerId: user.uid, status });
-                            setDatabaseEntities((items) => items.map((item) => item.id === entity.id ? { ...item, status } : item));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Database entity status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="draft">Draft</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
-                        </select>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <code className="text-sm text-blue-300">{entity.name}</code>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{entity.purpose || "No purpose documented."}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={entity.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectDatabaseEntityStatus;
+                              try {
+                                await updateProjectDatabaseEntityStatus({ projectId: project.id, entityId: entity.id, ownerId: user.uid, status });
+                                setDatabaseEntities((items) => items.map((item) => item.id === entity.id ? { ...item, status } : item));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Database entity status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="draft">Draft</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
+                            </select>
+                            <button onClick={() => { setEditingDatabaseEntityId(entity.id); setEditingDatabaseEntity({ name: entity.name, purpose: entity.purpose }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === entity.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this database entity? This cannot be undone.")) return;
+                              setDeletingRequirementId(entity.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: entity.id, ownerId: user.uid, collectionName: "databaseEntities" });
+                                setDatabaseEntities((items) => items.filter((current) => current.id !== entity.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The database entity could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === entity.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -525,27 +726,63 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No API contracts defined yet.</div>
                   ) : apiContracts.map((contract) => (
                     <div key={contract.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-md border border-blue-900/60 bg-blue-950/40 px-2 py-1 text-[10px] font-semibold text-blue-300">{contract.method}</span>
-                            <code className="text-sm text-slate-300">{contract.path}</code>
-                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500">{contract.status}</span>
+                      {editingApiContractId === contract.id ? (
+                        <div className="space-y-3">
+                          <div className="grid gap-3 sm:grid-cols-[140px_1fr]">
+                            <select value={editingApiContract.method} onChange={(e) => setEditingApiContract((v) => ({ ...v, method: e.target.value as ProjectApiMethod }))} aria-label="HTTP method" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select>
+                            <input value={editingApiContract.path} onChange={(e) => setEditingApiContract((v) => ({ ...v, path: e.target.value }))} maxLength={300} aria-label="API path" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
                           </div>
-                          <h3 className="mt-3 font-semibold">{contract.title}</h3>
-                          {contract.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{contract.description}</p>}
+                          <input value={editingApiContract.title} onChange={(e) => setEditingApiContract((v) => ({ ...v, title: e.target.value }))} maxLength={200} aria-label="Contract title" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <textarea value={editingApiContract.description} onChange={(e) => setEditingApiContract((v) => ({ ...v, description: e.target.value }))} maxLength={2000} rows={3} aria-label="Contract description" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={savingApiContractEdit || !editingApiContract.path.trim().startsWith("/") || !editingApiContract.title.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingApiContractEdit(true); setError(null);
+                              try {
+                                await updateProjectApiContract({ projectId: project.id, contractId: contract.id, ownerId: user.uid, ...editingApiContract });
+                                setApiContracts((items) => items.map((item) => item.id === contract.id ? { ...item, ...editingApiContract, path: editingApiContract.path.trim(), title: editingApiContract.title.trim(), description: editingApiContract.description.trim() || undefined } : item));
+                                setEditingApiContractId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "API contract could not be saved."); }
+                              finally { setSavingApiContractEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingApiContractEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingApiContractId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
+                          </div>
                         </div>
-                        <select value={contract.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectApiStatus;
-                          try {
-                            await updateProjectApiContractStatus({ projectId: project.id, contractId: contract.id, ownerId: user.uid, status });
-                            setApiContracts((items) => items.map((item) => item.id === contract.id ? { ...item, status } : item));
-                          } catch (err) { setError(err instanceof Error ? err.message : "API contract status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="draft">Draft</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
-                        </select>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-md border border-blue-900/60 bg-blue-950/40 px-2 py-1 text-[10px] font-semibold text-blue-300">{contract.method}</span>
+                              <code className="text-sm text-slate-300">{contract.path}</code>
+                              <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500">{contract.status}</span>
+                            </div>
+                            <h3 className="mt-3 font-semibold">{contract.title}</h3>
+                            {contract.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{contract.description}</p>}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={contract.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectApiStatus;
+                              try {
+                                await updateProjectApiContractStatus({ projectId: project.id, contractId: contract.id, ownerId: user.uid, status });
+                                setApiContracts((items) => items.map((item) => item.id === contract.id ? { ...item, status } : item));
+                              } catch (err) { setError(err instanceof Error ? err.message : "API contract status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="draft">Draft</option><option value="active">Active</option><option value="deprecated">Deprecated</option>
+                            </select>
+                            <button onClick={() => { setEditingApiContractId(contract.id); setEditingApiContract({ method: contract.method, path: contract.path, title: contract.title, description: contract.description ?? "" }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === contract.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this API contract? This cannot be undone.")) return;
+                              setDeletingRequirementId(contract.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: contract.id, ownerId: user.uid, collectionName: "apiContracts" });
+                                setApiContracts((items) => items.filter((current) => current.id !== contract.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The API contract could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === contract.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -577,23 +814,56 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No design decisions recorded yet.</div>
                   ) : designDecisions.map((item) => (
                     <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{item.title}</h3><span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{item.status}</span></div>
-                          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{item.decision}</p>
-                          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-500"><span className="text-slate-400">Rationale:</span> {item.rationale || "Not provided."}</p>
+                      {editingDesignDecisionId === item.id ? (
+                        <div className="space-y-3">
+                          <input value={editingDesignDecision.title} onChange={(e) => setEditingDesignDecision((v) => ({ ...v, title: e.target.value }))} maxLength={200} aria-label="Decision title" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <textarea value={editingDesignDecision.decision} onChange={(e) => setEditingDesignDecision((v) => ({ ...v, decision: e.target.value }))} maxLength={5000} rows={4} aria-label="Design decision" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <textarea value={editingDesignDecision.rationale} onChange={(e) => setEditingDesignDecision((v) => ({ ...v, rationale: e.target.value }))} maxLength={5000} rows={3} aria-label="Decision rationale" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={savingDesignDecisionEdit || !editingDesignDecision.title.trim() || !editingDesignDecision.decision.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingDesignDecisionEdit(true); setError(null);
+                              try {
+                                await updateProjectDesignDecision({ projectId: project.id, decisionId: item.id, ownerId: user.uid, ...editingDesignDecision });
+                                setDesignDecisions((items) => items.map((current) => current.id === item.id ? { ...current, ...editingDesignDecision, title: editingDesignDecision.title.trim(), decision: editingDesignDecision.decision.trim(), rationale: editingDesignDecision.rationale.trim() } : current));
+                                setEditingDesignDecisionId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Design decision could not be saved."); }
+                              finally { setSavingDesignDecisionEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingDesignDecisionEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingDesignDecisionId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
+                          </div>
                         </div>
-                        <select value={item.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectDesignDecisionStatus;
-                          try {
-                            await updateProjectDesignDecisionStatus({ projectId: project.id, decisionId: item.id, ownerId: user.uid, status });
-                            setDesignDecisions((items) => items.map((current) => current.id === item.id ? { ...current, status } : current));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Design decision status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="proposed">Proposed</option><option value="accepted">Accepted</option><option value="superseded">Superseded</option>
-                        </select>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{item.title}</h3><span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{item.status}</span></div>
+                            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{item.decision}</p>
+                            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-500"><span className="text-slate-400">Rationale:</span> {item.rationale || "Not provided."}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={item.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectDesignDecisionStatus;
+                              try {
+                                await updateProjectDesignDecisionStatus({ projectId: project.id, decisionId: item.id, ownerId: user.uid, status });
+                                setDesignDecisions((items) => items.map((current) => current.id === item.id ? { ...current, status } : current));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Design decision status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="proposed">Proposed</option><option value="accepted">Accepted</option><option value="superseded">Superseded</option>
+                            </select>
+                            <button onClick={() => { setEditingDesignDecisionId(item.id); setEditingDesignDecision({ title: item.title, decision: item.decision, rationale: item.rationale }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === item.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this design decision? This cannot be undone.")) return;
+                              setDeletingRequirementId(item.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: item.id, ownerId: user.uid, collectionName: "designDecisions" });
+                                setDesignDecisions((items) => items.filter((current) => current.id !== item.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The design decision could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === item.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -625,23 +895,56 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No milestones defined yet.</div>
                   ) : milestones.map((milestone) => (
                     <div key={milestone.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div>
-                          <h3 className="font-semibold">{milestone.title}</h3>
-                          {milestone.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{milestone.description}</p>}
-                          {milestone.targetDate && <p className="mt-3 text-xs text-slate-600">Target: {milestone.targetDate}</p>}
+                      {editingMilestoneId === milestone.id ? (
+                        <div className="space-y-3">
+                          <input value={editingMilestone.title} onChange={(e) => setEditingMilestone((v) => ({ ...v, title: e.target.value }))} maxLength={200} aria-label="Milestone title" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <textarea value={editingMilestone.description} onChange={(e) => setEditingMilestone((v) => ({ ...v, description: e.target.value }))} maxLength={2000} rows={3} aria-label="Milestone description" placeholder="Describe the milestone outcome." className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input type="date" value={editingMilestone.targetDate} onChange={(e) => setEditingMilestone((v) => ({ ...v, targetDate: e.target.value }))} aria-label="Milestone target date" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm" />
+                            <button disabled={savingMilestoneEdit || !editingMilestone.title.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingMilestoneEdit(true); setError(null);
+                              try {
+                                await updateProjectMilestone({ projectId: project.id, milestoneId: milestone.id, ownerId: user.uid, ...editingMilestone });
+                                setMilestones((items) => items.map((item) => item.id === milestone.id ? { ...item, title: editingMilestone.title.trim(), description: editingMilestone.description.trim() || undefined, targetDate: editingMilestone.targetDate || undefined } : item));
+                                setEditingMilestoneId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Milestone could not be saved."); }
+                              finally { setSavingMilestoneEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">{savingMilestoneEdit ? "Saving..." : "Save changes"}</button>
+                            <button onClick={() => setEditingMilestoneId(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-xs">Cancel</button>
+                          </div>
                         </div>
-                        <select value={milestone.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as ProjectMilestoneStatus;
-                          try {
-                            await updateProjectMilestoneStatus({ projectId: project.id, milestoneId: milestone.id, ownerId: user.uid, status });
-                            setMilestones((items) => items.map((item) => item.id === milestone.id ? { ...item, status } : item));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Milestone status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="planned">Planned</option><option value="in-progress">In progress</option><option value="done">Done</option>
-                        </select>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <h3 className="font-semibold">{milestone.title}</h3>
+                            {milestone.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{milestone.description}</p>}
+                            {milestone.targetDate && <p className="mt-3 text-xs text-slate-600">Target: {milestone.targetDate}</p>}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={milestone.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as ProjectMilestoneStatus;
+                              try {
+                                await updateProjectMilestoneStatus({ projectId: project.id, milestoneId: milestone.id, ownerId: user.uid, status });
+                                setMilestones((items) => items.map((item) => item.id === milestone.id ? { ...item, status } : item));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Milestone status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="planned">Planned</option><option value="in-progress">In progress</option><option value="done">Done</option>
+                            </select>
+                            <button onClick={() => { setEditingMilestoneId(milestone.id); setEditingMilestone({ title: milestone.title, description: milestone.description ?? "", targetDate: milestone.targetDate ?? "" }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button type="button" disabled={deletingRequirementId === milestone.id} onClick={async () => {
+                              if (!user || !project || !window.confirm("Delete this milestone? This cannot be undone.")) return;
+                              setDeletingRequirementId(milestone.id); setError(null);
+                              try {
+                                await deleteProjectEngineeringRecord({ projectId: project.id, recordId: milestone.id, ownerId: user.uid, collectionName: "roadmap" });
+                                setMilestones((items) => items.filter((current) => current.id !== milestone.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "The milestone could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50">{deletingRequirementId === milestone.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -725,25 +1028,63 @@ export default function ProjectSectionPage() {
                     <div className="rounded-2xl border border-dashed border-slate-800 py-14 text-center text-sm text-slate-500">No requirements defined yet.</div>
                   ) : requirements.map((requirement) => (
                     <div key={requirement.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-semibold">{requirement.title}</h3>
-                            <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{requirement.priority}</span>
+                      {editingRequirementId === requirement.id ? (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <h3 className="font-semibold">Edit requirement</h3>
+                            <button onClick={() => setEditingRequirementId(null)} className="text-xs text-slate-400 hover:text-white">Cancel</button>
                           </div>
-                          {requirement.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{requirement.description}</p>}
+                          <input value={editingRequirement.title} onChange={(e) => setEditingRequirement((value) => ({ ...value, title: e.target.value }))} maxLength={200} placeholder="Requirement title" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                          <textarea value={editingRequirement.description} onChange={(e) => setEditingRequirement((value) => ({ ...value, description: e.target.value }))} maxLength={2000} rows={3} placeholder="Describe the requirement and expected behavior." className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <select value={editingRequirement.priority} onChange={(e) => setEditingRequirement((value) => ({ ...value, priority: e.target.value as ProjectRequirementPriority }))} className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm">
+                              <option value="low">Low priority</option><option value="medium">Medium priority</option><option value="high">High priority</option><option value="critical">Critical priority</option>
+                            </select>
+                            <button disabled={savingRequirementEdit || !editingRequirement.title.trim()} onClick={async () => {
+                              if (!user || !project) return;
+                              setSavingRequirementEdit(true); setError(null);
+                              try {
+                                await updateProjectRequirement({ projectId: project.id, requirementId: requirement.id, ownerId: user.uid, ...editingRequirement });
+                                setRequirements((items) => items.map((item) => item.id === requirement.id ? { ...item, title: editingRequirement.title.trim(), description: editingRequirement.description.trim() || undefined, priority: editingRequirement.priority } : item));
+                                setEditingRequirementId(null);
+                              } catch (err) { setError(err instanceof Error ? err.message : "Requirement could not be saved."); }
+                              finally { setSavingRequirementEdit(false); }
+                            }} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50">{savingRequirementEdit ? "Saving..." : "Save changes"}</button>
+                          </div>
                         </div>
-                        <select value={requirement.status} onChange={async (e) => {
-                          if (!user || !project) return;
-                          const status = e.target.value as "todo" | "in-progress" | "done";
-                          try {
-                            await updateProjectRequirementStatus({ projectId: project.id, requirementId: requirement.id, ownerId: user.uid, status });
-                            setRequirements((items) => items.map((item) => item.id === requirement.id ? { ...item, status } : item));
-                          } catch (err) { setError(err instanceof Error ? err.message : "Requirement status could not be updated."); }
-                        }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
-                          <option value="todo">To do</option><option value="in-progress">In progress</option><option value="done">Done</option>
-                        </select>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-semibold">{requirement.title}</h3>
+                              <span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{requirement.priority}</span>
+                            </div>
+                            {requirement.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500">{requirement.description}</p>}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select value={requirement.status} onChange={async (e) => {
+                              if (!user || !project) return;
+                              const status = e.target.value as "todo" | "in-progress" | "done";
+                              try {
+                                await updateProjectRequirementStatus({ projectId: project.id, requirementId: requirement.id, ownerId: user.uid, status });
+                                setRequirements((items) => items.map((item) => item.id === requirement.id ? { ...item, status } : item));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Requirement status could not be updated."); }
+                            }} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                              <option value="todo">To do</option><option value="in-progress">In progress</option><option value="done">Done</option>
+                            </select>
+                            <button onClick={() => { setEditingRequirementId(requirement.id); setEditingRequirement({ title: requirement.title, description: requirement.description ?? "", priority: requirement.priority }); setError(null); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-500 hover:text-white">Edit</button>
+                            <button disabled={deletingRequirementId === requirement.id} onClick={async () => {
+                              if (!user || !project || !window.confirm(`Delete requirement "${requirement.title}"? This cannot be undone.`)) return;
+                              setDeletingRequirementId(requirement.id); setError(null);
+                              try {
+                                await deleteProjectRequirement({ projectId: project.id, requirementId: requirement.id, ownerId: user.uid });
+                                setRequirements((items) => items.filter((item) => item.id !== requirement.id));
+                              } catch (err) { setError(err instanceof Error ? err.message : "Requirement could not be deleted."); }
+                              finally { setDeletingRequirementId(null); }
+                            }} className="rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300 hover:border-red-600 hover:text-red-200 disabled:opacity-50">{deletingRequirementId === requirement.id ? "Deleting..." : "Delete"}</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

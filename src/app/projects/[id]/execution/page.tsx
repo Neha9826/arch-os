@@ -29,6 +29,8 @@ export default function ProjectExecutionPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | ProjectExecutionTaskStatus>("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | ProjectExecutionTaskPriority>("all");
   const [sectionFilter, setSectionFilter] = useState<ProjectSectionKey | "all">("all");
+  const [sortBy, setSortBy] = useState<"dueDate" | "priority" | "title">("dueDate");
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newTask, setNewTask] = useState<{ title: string; description: string; priority: ProjectExecutionTaskPriority; section: ProjectSectionKey | ""; sourceId: string; dueDate: string }>({
     title: "", description: "", priority: "medium", section: "", sourceId: "", dueDate: "",
@@ -62,21 +64,52 @@ export default function ProjectExecutionPage() {
     void loadExecutionWorkspace();
   }, [projectId, user]);
 
+  const now = new Date();
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+  const formatDueDate = (dueDate: string, status: ProjectExecutionTaskStatus) => {
+    const [year, month, day] = dueDate.split("-").map(Number);
+    const [todayYear, todayMonth, todayDay] = todayKey.split("-").map(Number);
+    const dueDay = Date.UTC(year, month - 1, day);
+    const currentDay = Date.UTC(todayYear, todayMonth - 1, todayDay);
+    const daysUntilDue = Math.round((dueDay - currentDay) / 86_400_000);
+    if (status === "done") return dueDate;
+    if (daysUntilDue < 0) {
+      const overdueDays = Math.abs(daysUntilDue);
+      return `Overdue by ${overdueDays} ${overdueDays === 1 ? "day" : "days"} · ${dueDate}`;
+    }
+    if (daysUntilDue === 0) return `Due today · ${dueDate}`;
+    if (daysUntilDue === 1) return `Due tomorrow · ${dueDate}`;
+    if (daysUntilDue <= 7) return `Due in ${daysUntilDue} days · ${dueDate}`;
+    return dueDate;
+  };
+
   const summary = useMemo(() => ({
     total: tasks.length, active: tasks.filter((task) => task.status !== "done").length,
     blocked: tasks.filter((task) => task.status === "blocked").length, done: tasks.filter((task) => task.status === "done").length,
-  }), [tasks]);
+    overdue: tasks.filter((task) => task.status !== "done" && Boolean(task.dueDate) && task.dueDate! < todayKey).length,
+  }), [tasks, todayKey]);
+
+  const completionRate = summary.total === 0 ? 0 : Math.round((summary.done / summary.total) * 100);
 
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
+    const priorityRank: Record<ProjectExecutionTaskPriority, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     return tasks.filter((task) => {
       const matchesSearch = !query || [task.title, task.description, task.sourceId].some((value) => value?.toLowerCase().includes(query));
       const matchesStatus = statusFilter === "all" || task.status === statusFilter;
       const matchesPriority = priorityFilter === "all" || task.priority === priorityFilter;
       const matchesSection = sectionFilter === "all" || task.section === sectionFilter;
-      return matchesSearch && matchesStatus && matchesPriority && matchesSection;
+      const matchesOverdue = !overdueOnly || (task.status !== "done" && Boolean(task.dueDate) && task.dueDate! < todayKey);
+      return matchesSearch && matchesStatus && matchesPriority && matchesSection && matchesOverdue;
+    }).sort((a, b) => {
+      if (sortBy === "priority") return priorityRank[a.priority] - priorityRank[b.priority] || a.title.localeCompare(b.title);
+      if (sortBy === "title") return a.title.localeCompare(b.title);
+      const aDue = a.dueDate || "9999-12-31";
+      const bDue = b.dueDate || "9999-12-31";
+      return aDue.localeCompare(bDue) || (a.status === "done" ? 1 : 0) - (b.status === "done" ? 1 : 0) || a.title.localeCompare(b.title);
     });
-  }, [tasks, search, statusFilter, priorityFilter, sectionFilter]);
+  }, [tasks, search, statusFilter, priorityFilter, sectionFilter, sortBy, overdueOnly, todayKey]);
 
   const addTask = async () => {
     if (!user || !newTask.title.trim() || saving) return;
@@ -144,6 +177,36 @@ export default function ProjectExecutionPage() {
   if (loading || fetching) return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-400">Loading execution workspace...</div>;
   if (!user) return null;
 
+  const exportTasksCsv = () => {
+    const headers = ["Title", "Description", "Status", "Priority", "Section", "Source ID", "Due Date"];
+    const escapeCsv = (value: string | undefined) => {
+      const normalized = value ?? "";
+      // Prevent spreadsheet applications from evaluating user-controlled cells as formulas.
+      const safeValue = /^[\t\r ]*[=+@-]/.test(normalized) ? `'${normalized}` : normalized;
+      return `"${safeValue.replace(/"/g, '""')}"`;
+    };
+    const rows = filteredTasks.map((task) => [
+      task.title,
+      task.description,
+      STATUS_META[task.status],
+      task.priority,
+      task.section ? SECTION_LABELS[task.section] : "",
+      task.sourceId,
+      task.dueDate,
+    ].map(escapeCsv).join(","));
+    const csv = [headers.map(escapeCsv).join(","), ...rows].join("\r\n");
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const projectSlug = (projectName || "project").trim().replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "") || "project";
+    link.download = `${projectSlug}-execution-tasks.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-8 text-slate-100">
       <div className="mx-auto max-w-6xl">
@@ -152,9 +215,29 @@ export default function ProjectExecutionPage() {
         <header className="border-b border-slate-800 pb-8">
           <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
             <div><div className="flex items-center gap-3"><ListTodo size={22} className="text-blue-400" /><h1 className="text-3xl font-bold tracking-tight">Execution</h1></div><p className="mt-2 max-w-2xl text-sm text-slate-400">Turn project definitions into actionable, traceable engineering work.</p></div>
-            <div className="grid grid-cols-4 gap-2 text-center text-xs">{[["Total", summary.total], ["Active", summary.active], ["Blocked", summary.blocked], ["Done", summary.done]].map(([label, value]) => <div key={label} className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2"><div className="text-lg font-semibold">{value}</div><div className="text-slate-500">{label}</div></div>)}</div>
+            <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-5">{[["Total", summary.total], ["Active", summary.active], ["Blocked", summary.blocked], ["Overdue", summary.overdue], ["Done", summary.done]].map(([label, value]) => <div key={label} className={`rounded-xl border px-3 py-2 ${label === "Overdue" && Number(value) > 0 ? "border-red-900/70 bg-red-950/30" : "border-slate-800 bg-slate-900"}`}><div className={`text-lg font-semibold ${label === "Overdue" && Number(value) > 0 ? "text-red-300" : ""}`}>{value}</div><div className="text-slate-500">{label}</div></div>)}</div>
           </div>
         </header>
+        <section aria-label="Execution progress" className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-200">Project execution progress</h2>
+              <p className="mt-1 text-xs text-slate-500">{summary.done} of {summary.total} tasks completed</p>
+            </div>
+            <span className="text-xl font-semibold tabular-nums text-slate-100">{completionRate}%</span>
+          </div>
+          <div
+            role="progressbar"
+            aria-label="Task completion"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={completionRate}
+            className="h-2.5 overflow-hidden rounded-full bg-slate-800"
+          >
+            <div className="h-full rounded-full bg-blue-500 transition-[width] duration-300" style={{ width: `${completionRate}%` }} />
+          </div>
+          {summary.total === 0 ? <p className="mt-3 text-xs text-slate-500">Create your first execution task to start tracking progress.</p> : null}
+        </section>
         <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
           <h2 className="font-semibold">Create execution task</h2>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -180,6 +263,7 @@ export default function ProjectExecutionPage() {
                 />
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={exportTasksCsv} disabled={filteredTasks.length === 0} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Export CSV ({filteredTasks.length})</button>
                 <div className="flex items-center gap-1 text-slate-600"><Filter size={14} /></div>
                 <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
                   <option value="all">All statuses</option>
@@ -193,19 +277,25 @@ export default function ProjectExecutionPage() {
                   <option value="all">All sections</option>
                   {Object.entries(SECTION_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                 </select>
+                <select aria-label="Sort tasks" value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">
+                  <option value="dueDate">Sort: due date</option><option value="priority">Sort: priority</option><option value="title">Sort: title</option>
+                </select>
+                <button type="button" aria-pressed={overdueOnly} onClick={() => setOverdueOnly((value) => !value)} className={`rounded-lg border px-3 py-2 text-xs ${overdueOnly ? "border-red-800 bg-red-950/40 text-red-200" : "border-slate-700 text-slate-300 hover:border-red-900"}`}>
+                  {overdueOnly ? "Showing overdue" : "Overdue only"}
+                </button>
               </div>
             </div>
-            {(search || statusFilter !== "all" || priorityFilter !== "all" || sectionFilter !== "all") ? (
+            {(search || statusFilter !== "all" || priorityFilter !== "all" || sectionFilter !== "all" || overdueOnly) ? (
               <div className="mt-3 flex items-center justify-between text-[11px] text-slate-600">
                 <span>Showing {filteredTasks.length} of {tasks.length} tasks</span>
-                <button onClick={() => { setSearch(""); setStatusFilter("all"); setPriorityFilter("all"); setSectionFilter("all"); }} className="text-blue-400 hover:text-blue-300">Clear filters</button>
+                <button onClick={() => { setSearch(""); setStatusFilter("all"); setPriorityFilter("all"); setSectionFilter("all"); setOverdueOnly(false); }} className="text-blue-400 hover:text-blue-300">Clear filters</button>
               </div>
             ) : null}
           </div>
           {tasks.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-800 py-16 text-center text-sm text-slate-500">No execution tasks yet.</div> : filteredTasks.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-800 py-16 text-center text-sm text-slate-500">No tasks match the current filters.</div> : <div className="space-y-3">{filteredTasks.map((task) => (
             <article key={task.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0"><div className="flex flex-wrap items-center gap-2">{task.status === "done" ? <CheckCircle2 size={16} className="text-emerald-400" /> : task.status === "blocked" ? <CircleAlert size={16} className="text-red-400" /> : <ListTodo size={16} className="text-blue-400" />}<h3 className="font-semibold">{task.title}</h3><span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{task.priority}</span>{task.section ? <span className="rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] text-slate-500">{SECTION_LABELS[task.section]}</span> : null}</div>{task.description ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-400">{task.description}</p> : null}<div className="mt-3 flex flex-wrap gap-3 text-[11px] text-slate-600">{task.sourceId ? <span>Source: {task.sourceId}</span> : null}{task.dueDate ? <span>Due: {task.dueDate}</span> : null}</div></div>
+                <div className="min-w-0"><div className="flex flex-wrap items-center gap-2">{task.status === "done" ? <CheckCircle2 size={16} className="text-emerald-400" /> : task.status === "blocked" ? <CircleAlert size={16} className="text-red-400" /> : <ListTodo size={16} className="text-blue-400" />}<h3 className="font-semibold">{task.title}</h3><span className="rounded-md border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">{task.priority}</span>{task.section ? <span className="rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] text-slate-500">{SECTION_LABELS[task.section]}</span> : null}</div>{task.description ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-400">{task.description}</p> : null}<div className="mt-3 flex flex-wrap gap-3 text-[11px] text-slate-600">{task.sourceId ? <span>Source: {task.sourceId}</span> : null}{task.dueDate ? <span className={task.status !== "done" && task.dueDate < todayKey ? "font-semibold text-red-300" : task.status !== "done" && task.dueDate === todayKey ? "font-semibold text-amber-300" : ""}>{formatDueDate(task.dueDate, task.status)}</span> : null}</div></div>
                 <div className="flex items-center gap-2"><select value={task.status} onChange={(e) => void changeStatus(task, e.target.value as ProjectExecutionTaskStatus)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">{Object.entries(STATUS_META).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><button onClick={() => startEditing(task)} className="rounded-lg border border-slate-800 p-2 text-slate-500 hover:border-blue-900 hover:text-blue-400" title="Edit task"><Pencil size={15} /></button><button onClick={() => void removeTask(task)} className="rounded-lg border border-slate-800 p-2 text-slate-500 hover:border-red-900 hover:text-red-400" title="Delete task"><Trash2 size={15} /></button></div>
               </div>
             </article>

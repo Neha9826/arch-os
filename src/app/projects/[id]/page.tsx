@@ -19,14 +19,18 @@ import {
   BookOpen,
   Circle,
   ListTodo,
+  Pencil,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
   getProject,
+  updateProject,
   updateProjectSectionStatus,
 } from "@/lib/repositories/projects";
 import {
   listArchitecturesForProject,
+  renameArchitecture,
   type Architecture,
 } from "@/lib/repositories/architectures";
 import {
@@ -36,6 +40,7 @@ import {
   type ProjectSectionStatus,
 } from "@/domain/project/types";
 import { createDefaultProjectSections } from "@/domain/project/validation";
+import { resetProjectDemoData, seedProjectDemoData } from "@/lib/demo/seedProjectDemoData";
 
 const SECTION_META: Record<
   ProjectSectionKey,
@@ -69,6 +74,15 @@ export default function ProjectDetailPage() {
   const [architectures, setArchitectures] = useState<Architecture[]>([]);
   const [fetching, setFetching] = useState(true);
   const [savingSection, setSavingSection] = useState<ProjectSectionKey | null>(null);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [projectDraft, setProjectDraft] = useState({ name: "", description: "" });
+  const [savingProjectDetails, setSavingProjectDetails] = useState(false);
+  const [editingArchitectureId, setEditingArchitectureId] = useState<string | null>(null);
+  const [architectureNameDraft, setArchitectureNameDraft] = useState("");
+  const [savingArchitectureName, setSavingArchitectureName] = useState(false);
+  const [seedingDemo, setSeedingDemo] = useState(false);
+  const [resettingDemo, setResettingDemo] = useState(false);
+  const [seedMessage, setSeedMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -140,6 +154,48 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const resetDemoData = async () => {
+    if (!user || !project || resettingDemo || seedingDemo) return;
+    const confirmed = window.confirm("Remove only ArchOS demo-seeded records from this project? Your own records will be preserved.");
+    if (!confirmed) return;
+    setResettingDemo(true);
+    setSeedMessage(null);
+    setError(null);
+    try {
+      const removed = await resetProjectDemoData(project, user.uid);
+      const refreshed = await getProject(project.id);
+      if (refreshed) setProject(refreshed);
+      setArchitectures(await listArchitecturesForProject(project.id, user.uid));
+      setSeedMessage(removed.length
+        ? `Removed demo data from: ${removed.join(", ")}. You can now seed again.`
+        : "No matching demo records were found to remove.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Demo data could not be reset.");
+    } finally {
+      setResettingDemo(false);
+    }
+  };
+
+  const loadDemoData = async () => {
+    if (!user || !project || seedingDemo) return;
+    setSeedingDemo(true);
+    setSeedMessage(null);
+    setError(null);
+    try {
+      const added = await seedProjectDemoData(project, user.uid);
+      const refreshed = await getProject(project.id);
+      if (refreshed) setProject(refreshed);
+      setArchitectures(await listArchitecturesForProject(project.id, user.uid));
+      setSeedMessage(added.length
+        ? `Added demo data for: ${added.join(", ")}. Reload the project to review every module.`
+        : "Demo records already exist. No duplicate data was created.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Demo data could not be created.");
+    } finally {
+      setSeedingDemo(false);
+    }
+  };
+
   if (loading || fetching) {
     return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-400">Loading project...</div>;
   }
@@ -155,6 +211,7 @@ export default function ProjectDetailPage() {
           <ArrowLeft size={16} /> Projects
         </button>
 
+        {seedMessage ? <div role="status" className="mb-4 rounded-xl border border-violet-800/60 bg-violet-950/30 p-3 text-sm text-violet-200">{seedMessage}</div> : null}
         {error ? (
           <div className="mb-6 rounded-2xl border border-red-900/60 bg-red-950/30 p-4 text-sm text-red-200">{error}</div>
         ) : null}
@@ -173,6 +230,9 @@ export default function ProjectDetailPage() {
                   <p className="mt-2 max-w-3xl text-sm text-slate-400">
                     {project.description || "Engineering workspace for this product."}
                   </p>
+                  <button type="button" onClick={() => { setProjectDraft({ name: project.name, description: project.description ?? "" }); setEditingDetails((value) => !value); setError(null); }} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-300 hover:border-blue-600 hover:text-white">
+                    {editingDetails ? <X size={14} /> : <Pencil size={14} />} {editingDetails ? "Cancel editing" : "Edit project details"}
+                  </button>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
                 <button
@@ -187,6 +247,24 @@ export default function ProjectDetailPage() {
                 >
                   <Network size={16} /> New Architecture
                 </button>
+                {process.env.NODE_ENV !== "production" ? (
+                  <>
+                    <button
+                      onClick={() => void loadDemoData()}
+                      disabled={seedingDemo || resettingDemo}
+                      className="flex items-center justify-center gap-2 rounded-xl border border-violet-700/70 bg-violet-950/40 px-4 py-2.5 text-sm font-semibold text-violet-200 hover:bg-violet-900/50 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      <Boxes size={16} /> {seedingDemo ? "Preparing demo data…" : "Load test data"}
+                    </button>
+                    <button
+                      onClick={() => void resetDemoData()}
+                      disabled={seedingDemo || resettingDemo}
+                      className="flex items-center justify-center gap-2 rounded-xl border border-red-800/70 bg-red-950/30 px-4 py-2.5 text-sm font-semibold text-red-200 hover:bg-red-900/40 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {resettingDemo ? "Resetting demo…" : "Reset demo data"}
+                    </button>
+                  </>
+                ) : null}
                 </div>
               </div>
 
@@ -203,6 +281,37 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
             </header>
+
+            {editingDetails ? (
+              <form className="mt-6 max-w-3xl space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-5" onSubmit={async (event) => {
+                event.preventDefault();
+                if (!project || savingProjectDetails) return;
+                setSavingProjectDetails(true); setError(null);
+                try {
+                  await updateProject({ projectId: project.id, name: projectDraft.name, description: projectDraft.description, status: project.status });
+                  setProject((current) => current ? { ...current, name: projectDraft.name.trim(), description: projectDraft.description.trim() } : current);
+                  setEditingDetails(false);
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Project details could not be saved.");
+                } finally {
+                  setSavingProjectDetails(false);
+                }
+              }}>
+                <div>
+                  <label htmlFor="project-name" className="mb-1 block text-xs font-medium text-slate-400">Project name</label>
+                  <input id="project-name" value={projectDraft.name} onChange={(event) => setProjectDraft((current) => ({ ...current, name: event.target.value }))} maxLength={120} required className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white" />
+                </div>
+                <div>
+                  <label htmlFor="project-description" className="mb-1 block text-xs font-medium text-slate-400">Description</label>
+                  <textarea id="project-description" value={projectDraft.description} onChange={(event) => setProjectDraft((current) => ({ ...current, description: event.target.value }))} maxLength={1000} rows={3} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white" placeholder="What is this project building?" />
+                  <p className="mt-1 text-right text-[11px] text-slate-600">{projectDraft.description.length}/1000</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="submit" disabled={savingProjectDetails || !projectDraft.name.trim() || projectDraft.name.trim().length > 120 || projectDraft.description.length > 1000} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">{savingProjectDetails ? "Saving..." : "Save details"}</button>
+                  <button type="button" onClick={() => setEditingDetails(false)} disabled={savingProjectDetails} className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm text-slate-300 disabled:opacity-50">Cancel</button>
+                </div>
+              </form>
+            ) : null}
 
             <section className="mt-8">
               <div className="mb-4">
@@ -278,14 +387,39 @@ export default function ProjectDetailPage() {
               ) : (
                 <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
                   {architectures.map((architecture) => (
-                    <button
-                      key={architecture.id}
-                      onClick={() => router.push(`/canvas/${architecture.id}`)}
-                      className="rounded-2xl border border-slate-800 bg-slate-900 p-5 text-left hover:border-slate-700"
-                    >
-                      <h3 className="font-semibold text-white">{architecture.name}</h3>
-                      <p className="mt-2 text-xs text-slate-500">Open architecture studio</p>
-                    </button>
+                    <article key={architecture.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5 hover:border-slate-700">
+                      {editingArchitectureId === architecture.id ? (
+                        <form onSubmit={async (event) => {
+                          event.preventDefault();
+                          if (!user || !architectureNameDraft.trim() || savingArchitectureName) return;
+                          setSavingArchitectureName(true); setError(null);
+                          try {
+                            await renameArchitecture(architecture.id, architectureNameDraft.trim(), user.uid);
+                            setArchitectures((items) => items.map((item) => item.id === architecture.id ? { ...item, name: architectureNameDraft.trim() } : item));
+                            setEditingArchitectureId(null);
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Architecture name could not be updated.");
+                          } finally {
+                            setSavingArchitectureName(false);
+                          }
+                        }} className="space-y-3">
+                          <label htmlFor={`architecture-name-${architecture.id}`} className="block text-xs font-medium text-slate-400">Architecture name</label>
+                          <input id={`architecture-name-${architecture.id}`} value={architectureNameDraft} onChange={(event) => setArchitectureNameDraft(event.target.value)} maxLength={120} required autoFocus className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+                          <div className="flex flex-wrap gap-2">
+                            <button type="submit" disabled={savingArchitectureName || !architectureNameDraft.trim() || architectureNameDraft.trim().length > 120} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold disabled:opacity-50">{savingArchitectureName ? "Saving..." : "Save name"}</button>
+                            <button type="button" onClick={() => setEditingArchitectureId(null)} disabled={savingArchitectureName} className="rounded-lg border border-slate-700 px-3 py-2 text-xs">Cancel</button>
+                          </div>
+                        </form>
+                      ) : (
+                        <>
+                          <button type="button" onClick={() => router.push(`/canvas/${architecture.id}`)} className="block w-full text-left">
+                            <h3 className="font-semibold text-white">{architecture.name}</h3>
+                            <p className="mt-2 text-xs text-slate-500">Open architecture studio</p>
+                          </button>
+                          <button type="button" onClick={() => { setArchitectureNameDraft(architecture.name); setEditingArchitectureId(architecture.id); setError(null); }} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-blue-600 hover:text-white"><Pencil size={13} /> Rename</button>
+                        </>
+                      )}
+                    </article>
                   ))}
                 </div>
               )}

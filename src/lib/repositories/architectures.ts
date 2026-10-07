@@ -173,9 +173,20 @@ export async function updateArchitecture(input: {
 export async function renameArchitecture(
   architectureId: string,
   name: string,
+  ownerId: string,
 ): Promise<void> {
-  await updateDoc(doc(db, ARCHITECTURES_COLLECTION, architectureId), {
-    name,
+  const normalizedName = name.trim();
+  if (!normalizedName || normalizedName.length > 120) {
+    throw new Error("Architecture name must be between 1 and 120 characters.");
+  }
+  const architectureRef = doc(db, ARCHITECTURES_COLLECTION, architectureId);
+  const snapshot = await getDoc(architectureRef);
+  if (!snapshot.exists()) throw new Error("Architecture not found.");
+  if (snapshot.data().ownerId !== ownerId) {
+    throw new Error("You do not have permission to rename this architecture.");
+  }
+  await updateDoc(architectureRef, {
+    name: normalizedName,
     updatedAt: serverTimestamp(),
   });
 }
