@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signInWithRedirect,
+  signInWithPopup,
 } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Cpu, ShieldCheck } from 'lucide-react';
@@ -60,7 +60,7 @@ export default function Login() {
     setSubmitting(true);
     setError(null);
     try {
-      await signInWithRedirect(auth, googleProvider);
+      await signInWithPopup(auth, googleProvider);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Google sign-in could not be started. Please try again.');
       setSubmitting(false);
