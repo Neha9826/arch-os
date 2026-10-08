@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import {
   createProjectMilestone,
   deleteProjectEngineeringRecord,
+  updateProjectMilestone,
   getProject,
   listProjectMilestones,
   updateProjectMilestoneStatus,
@@ -28,6 +29,10 @@ export default function ProjectRoadmapPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [targetDate, setTargetDate] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const [editingDescription, setEditingDescription] = useState("");
+  const [editingTargetDate, setEditingTargetDate] = useState("");
   const [fetching, setFetching] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
@@ -90,6 +95,36 @@ export default function ProjectRoadmapPage() {
     } finally { setSavingStatus(false); }
   };
 
+  const startEditing = (item: ProjectMilestone) => {
+    setEditingId(item.id);
+    setEditingTitle(item.title);
+    setEditingDescription(item.description ?? "");
+    setEditingTargetDate(item.targetDate ?? "");
+    setError(null);
+  };
+
+  const saveEdit = async (item: ProjectMilestone) => {
+    if (!user || !editingTitle.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await updateProjectMilestone({
+        projectId,
+        milestoneId: item.id,
+        ownerId: user.uid,
+        title: editingTitle,
+        description: editingDescription,
+        targetDate: editingTargetDate,
+      });
+      setEditingId(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Milestone could not be updated.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const changeMilestoneStatus = async (item: ProjectMilestone, status: ProjectMilestoneStatus) => {
     if (!user) return;
     try {
@@ -143,13 +178,25 @@ export default function ProjectRoadmapPage() {
           <div><h2 className="text-lg font-semibold">Milestone register</h2><p className="mt-1 text-xs text-slate-500">Project-owned roadmap checkpoints.</p></div>
           {milestones.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-800 py-16 text-center text-sm text-slate-500">No milestones yet.</div> : milestones.map((item) => (
             <article key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              {editingId === item.id ? (
+                <div className="space-y-4">
+                  <input value={editingTitle} onChange={(e) => setEditingTitle(e.target.value)} maxLength={200} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                  <textarea value={editingDescription} onChange={(e) => setEditingDescription(e.target.value)} maxLength={2000} rows={3} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm" />
+                  <input type="date" value={editingTargetDate} onChange={(e) => setEditingTargetDate(e.target.value)} className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm" />
+                  <div className="flex gap-2">
+                    <button type="button" disabled={saving || !editingTitle.trim()} onClick={() => void saveEdit(item)} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold disabled:opacity-50">{saving ? "Saving..." : "Save"}</button>
+                    <button type="button" disabled={saving} onClick={() => setEditingId(null)} className="rounded-lg border border-slate-700 px-3 py-2 text-xs">Cancel</button>
+                  </div>
+                </div>
+              ) : (
               <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
                 <div><h3 className="font-semibold">{item.title}</h3><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-400">{item.description || "No description provided."}</p>{item.targetDate ? <p className="mt-3 text-xs text-slate-600">Target: {item.targetDate}</p> : null}</div>
                 <div className="flex flex-wrap gap-2">
                   <select value={item.status} onChange={(e) => void changeMilestoneStatus(item, e.target.value as ProjectMilestoneStatus)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">{STATUSES.map((status) => <option key={status} value={status}>{status === "in-progress" ? "In progress" : status[0].toUpperCase() + status.slice(1)}</option>)}</select>
-                  <button type="button" onClick={() => void removeMilestone(item)} className="inline-flex items-center gap-1 rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300"><Trash2 size={13} /> Delete</button>
+                  <button type="button" onClick={() => startEditing(item)} className="rounded-lg border border-slate-700 px-3 py-2 text-xs">Edit</button><button type="button" onClick={() => void removeMilestone(item)} className="inline-flex items-center gap-1 rounded-lg border border-red-900/70 px-3 py-2 text-xs text-red-300"><Trash2 size={13} /> Delete</button>
                 </div>
               </div>
+              )}
             </article>
           ))}
         </section>
