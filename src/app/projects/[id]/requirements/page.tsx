@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Check,
@@ -27,6 +27,7 @@ import type {
   ProjectSectionStatus,
 } from "@/domain/project/types";
 import { updateProjectSectionStatus } from "@/lib/repositories/projects";
+import { createDefaultProjectSections } from "@/domain/project/validation";
 
 const PRIORITIES: ProjectRequirementPriority[] = [
   "low",
@@ -80,7 +81,7 @@ export default function ProjectRequirementsPage() {
     if (!loading && !user) router.replace("/login");
   }, [loading, user, router]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!user) return;
 
     const current = await getProject(projectId);
@@ -92,7 +93,7 @@ export default function ProjectRequirementsPage() {
     setProject(current);
     setRequirements(items);
     setSectionStatus(current.sections?.requirements ?? "not-started");
-  };
+  }, [projectId, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -118,7 +119,7 @@ export default function ProjectRequirementsPage() {
     return () => {
       cancelled = true;
     };
-  }, [projectId, user]);
+  }, [load]);
 
   const counts = useMemo(
     () => ({
@@ -275,6 +276,7 @@ export default function ProjectRequirementsPage() {
           ? {
               ...current,
               sections: {
+                ...createDefaultProjectSections(),
                 ...(current.sections ?? {}),
                 requirements: status,
               },
