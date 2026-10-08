@@ -119,7 +119,7 @@ export default function ProjectRequirementsPage() {
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [load, user]);
 
   const counts = useMemo(
     () => ({
