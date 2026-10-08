@@ -591,7 +591,7 @@ function StudioEditor() {
     if (hasUnsavedChanges) {
       setShowExitModal(true);
     } else {
-      router.push("/");
+      router.back();
     }
   };
 
@@ -1430,7 +1430,7 @@ Act as a supportive, highly collaborative tech lead reviewing a peer's design. Y
             onClick={handleBackClick}
             className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-2 text-sm font-medium"
           >
-            <ArrowLeft size={16} /> Dashboard
+            <ArrowLeft size={16} /> Back
           </button>
 
           <div className="h-4 w-[1px] bg-slate-800" />
