@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  Activity,
   Boxes,
   Check,
   ClipboardList,
@@ -240,6 +241,12 @@ export default function ProjectDetailPage() {
                   className="flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:border-blue-700 hover:text-blue-300"
                 >
                   <ListTodo size={16} /> Execution
+                </button>
+                <button
+                  onClick={() => router.push(`/projects/${project.id}/health`)}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:border-emerald-700 hover:text-emerald-300"
+                >
+                  <Activity size={16} /> Health
                 </button>
                 <button
                   onClick={() => router.push(`/canvas/new?projectId=${project.id}`)}
