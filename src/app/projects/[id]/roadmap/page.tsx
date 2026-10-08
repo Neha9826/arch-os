@@ -56,13 +56,28 @@ export default function ProjectRoadmapPage() {
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    void load().catch((err) => {
-      if (!cancelled) setError(err instanceof Error ? err.message : "Roadmap workspace could not be loaded.");
-    }).finally(() => {
-      if (!cancelled) setFetching(false);
-    });
+    const run = async () => {
+      try {
+        const current = await getProject(projectId);
+        if (!current || current.ownerId !== user.uid || current.status !== "active") {
+          throw new Error("Project is unavailable or archived.");
+        }
+        const items = await listProjectMilestones(projectId, user.uid);
+        if (cancelled) return;
+        setProject(current);
+        setSectionStatus(current.sections?.roadmap ?? "not-started");
+        setMilestones(items);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Roadmap workspace could not be loaded.");
+        }
+      } finally {
+        if (!cancelled) setFetching(false);
+      }
+    };
+    void run();
     return () => { cancelled = true; };
-  }, [load, user]);
+  }, [projectId, user]);
 
   const counts = useMemo(() => ({
     total: milestones.length,
