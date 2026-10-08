@@ -20,6 +20,7 @@ import {
   BookOpen,
   Circle,
   ListTodo,
+  Link2,
   Pencil,
   X,
 } from "lucide-react";
@@ -247,6 +248,12 @@ export default function ProjectDetailPage() {
                   className="flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:border-emerald-700 hover:text-emerald-300"
                 >
                   <Activity size={16} /> Health
+                </button>
+                <button
+                  onClick={() => router.push(`/projects/${project.id}/traceability`)}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:border-violet-700 hover:text-violet-300"
+                >
+                  <Link2 size={16} /> Traceability
                 </button>
                 <button
                   onClick={() => router.push(`/canvas/new?projectId=${project.id}`)}
