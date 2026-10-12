@@ -1021,6 +1021,20 @@ describe("Project execution task security rules", () => {
     await assertSucceeds(getDoc(taskRef));
   });
 
+  test("execution task creation rejects malformed due dates", async () => {
+    await seedProject();
+    const taskRef = doc(
+      authenticatedDb(userA),
+      "projects",
+      executionProject,
+      "executionTasks",
+      executionTask,
+    );
+
+    await assertFails(setDoc(taskRef, { ...taskData, dueDate: "2026/10/20" }));
+    await assertFails(setDoc(taskRef, { ...taskData, dueDate: "not-a-date" }));
+  });
+
   test("unauthenticated and other users cannot read execution tasks", async () => {
     await seedProject();
     await testEnv.withSecurityRulesDisabled(async (context) => {
@@ -1115,6 +1129,27 @@ describe("Project execution task security rules", () => {
       sourceId: "test-case-a",
       dueDate: "2026-11-01",
     }));
+  });
+
+  test("execution task updates reject malformed due dates", async () => {
+    await seedProject();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "projects", executionProject, "executionTasks", executionTask),
+        taskData,
+      );
+    });
+
+    const taskRef = doc(
+      authenticatedDb(userA),
+      "projects",
+      executionProject,
+      "executionTasks",
+      executionTask,
+    );
+
+    await assertFails(updateDoc(taskRef, { dueDate: "2026/11/01" }));
+    await assertFails(updateDoc(taskRef, { dueDate: "not-a-date" }));
   });
 
   test("execution task edits cannot add unexpected fields or mutate ownership", async () => {
