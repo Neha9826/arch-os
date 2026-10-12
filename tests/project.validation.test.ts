@@ -13,6 +13,7 @@ import {
   isValidProjectCodeArtifact,
   isValidProjectTestCase,
   isValidProjectDocumentationEntry,
+  isValidProjectExecutionTask,
 } from "@/domain/project/validation";
 import type { Project } from "@/domain/project/types";
 
@@ -190,6 +191,39 @@ describe("Project domain validation", () => {
     expect(
       isValidProjectDocumentationEntry({ ...base, title: " " }),
     ).toBe(false);
+  });
+
+  test("validates execution tasks and traceability metadata", () => {
+    const base = {
+      id: "task-1",
+      projectId: "project-1",
+      ownerId: "user-1",
+      title: "Implement user endpoint",
+      description: "Add the endpoint and cover the expected responses.",
+      priority: "high" as const,
+      status: "in-progress" as const,
+      section: "api" as const,
+      sourceId: "api-contract-1",
+      dueDate: "2026-11-15",
+    };
+
+    expect(isValidProjectExecutionTask(base)).toBe(true);
+    expect(isValidProjectExecutionTask({ ...base, priority: "urgent" as never })).toBe(false);
+    expect(isValidProjectExecutionTask({ ...base, status: "pending" as never })).toBe(false);
+    expect(isValidProjectExecutionTask({ ...base, section: "unknown" as never })).toBe(false);
+    expect(isValidProjectExecutionTask({ ...base, sourceId: "x".repeat(161) })).toBe(false);
+    expect(isValidProjectExecutionTask({ ...base, dueDate: "2026/11/15" })).toBe(false);
+    expect(isValidProjectExecutionTask({ ...base, title: " " })).toBe(false);
+    expect(isValidProjectExecutionTask({ ...base, description: "x".repeat(2001) })).toBe(false);
+    expect(
+      isValidProjectExecutionTask({
+        ...base,
+        description: undefined,
+        section: undefined,
+        sourceId: undefined,
+        dueDate: undefined,
+      }),
+    ).toBe(true);
   });
 
   test("rejects projects without tenant ownership", () => {
