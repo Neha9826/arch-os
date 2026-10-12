@@ -11,6 +11,12 @@ const PROJECT_PLANNING_FIELD_MAX_LENGTH = 5000;
 const PROJECT_REQUIREMENT_TITLE_MAX_LENGTH = 200;
 const PROJECT_REQUIREMENT_DESCRIPTION_MAX_LENGTH = 2000;
 
+function isValidDateOnlyString(value: string): boolean {
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 export function isProjectSectionKey(value: unknown): value is ProjectSectionKey {
   return (
     typeof value === "string" &&
