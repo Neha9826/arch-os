@@ -52,14 +52,14 @@ describe("buildOpenApiDocument", () => {
     expect(operation?.["x-archos-status"]).toBe("deprecated");
   });
 
-  test("creates unique operation IDs when titles normalize to the same value", () => {
+  test("creates unique operation IDs when different paths share a method and title", () => {
     const document = buildOpenApiDocument([
-      contract({ id: "one", title: "Get user" }),
-      contract({ id: "two", method: "POST", path: "/users", title: "Get user" }),
+      contract({ id: "one", path: "/users/{userId}", title: "Get user" }),
+      contract({ id: "two", path: "/accounts/{accountId}", title: "Get user" }),
     ], "Accounts API");
 
     expect(document.paths["/users/{userId}"].get?.operationId).toBe("get_get_user");
-    expect(document.paths["/users"].post?.operationId).toBe("post_get_user");
+    expect(document.paths["/accounts/{accountId}"].get?.operationId).toBe("get_get_user_2");
   });
 
   test("rejects duplicate contracts for the same method and path", () => {
