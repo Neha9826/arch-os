@@ -75,7 +75,7 @@ export function buildOpenApiDocument(
       throw new Error(`Duplicate API contract for ${contract.method} ${contract.path}.`);
     }
 
-    const baseId = toOperationId(`${contract.method}_${contract.title}`);
+    const baseId = toOperationId(contract.title);
     let operationId = baseId;
     let suffix = 2;
     while (usedOperationIds.has(operationId)) {
