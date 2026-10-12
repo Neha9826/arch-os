@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { deleteProjectEngineeringRecord, deleteProjectRequirement, updateProjectRequirement, createProjectApiContract, updateProjectApiContract, createProjectCodeArtifact, updateProjectCodeArtifact, createProjectTestCase, updateProjectTestCase, createProjectDocumentation, updateProjectDocumentation, createProjectDatabaseEntity, updateProjectDatabaseEntity, createProjectDesignDecision, updateProjectDesignDecision, createProjectInfrastructureResource, updateProjectInfrastructureResource, createProjectMilestone, updateProjectMilestone, createProjectRequirement, getProject, listProjectApiContracts, listProjectDatabaseEntities, listProjectDesignDecisions, listProjectInfrastructureResources, listProjectCodeArtifacts, listProjectTestCases, listProjectDocumentation, listProjectMilestones, listProjectRequirements, updateProjectApiContractStatus, updateProjectDatabaseEntityStatus, updateProjectDesignDecisionStatus, updateProjectInfrastructureResourceStatus, updateProjectCodeArtifactStatus, updateProjectTestCaseStatus, updateProjectDocumentationStatus, updateProjectMilestoneStatus, updateProjectPlanning, updateProjectRequirementStatus, updateProjectSectionStatus } from "@/lib/repositories/projects";
 import { listArchitecturesForProject, type Architecture } from "@/lib/repositories/architectures";
 import { PROJECT_SECTION_KEYS, type Project, type ProjectPlanning, type ProjectRequirement, type ProjectRequirementPriority, type ProjectDesignDecision, type ProjectApiContract, type ProjectApiMethod, type ProjectApiStatus, type ProjectDatabaseEntity, type ProjectDatabaseEntityStatus, type ProjectInfrastructureResource, type ProjectInfrastructureResourceStatus, type ProjectInfrastructureEnvironment, type ProjectCodeArtifact, type ProjectCodeArtifactStatus, type ProjectTestCase, type ProjectTestStatus, type ProjectTestType, type ProjectDocumentationEntry, type ProjectDocumentationStatus, type ProjectDocumentationType, type ProjectDesignDecisionStatus, ProjectMilestone, type ProjectMilestoneStatus, type ProjectSectionKey, type ProjectSectionStatus } from "@/domain/project/types";
+import { buildOpenApiDocument } from "@/domain/project/openapi";
 import { createDefaultProjectSections } from "@/domain/project/validation";
 
 const META: Record<ProjectSectionKey, { label: string; description: string }> = {
@@ -696,6 +697,37 @@ export default function ProjectSectionPage() {
               </section>
             ) : section === "api" ? (
               <section className="mt-6 space-y-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="font-semibold">API contracts</h2>
+                    <p className="mt-1 text-xs text-slate-500">Export saved contracts as an OpenAPI 3.1 JSON document.</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={apiContracts.length === 0}
+                    onClick={() => {
+                      if (!project) return;
+                      try {
+                        const specification = buildOpenApiDocument(apiContracts, project.name);
+                        const blob = new Blob([JSON.stringify(specification, null, 2)], { type: "application/json;charset=utf-8" });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement("a");
+                        link.href = url;
+                        const projectSlug = project.name.trim().replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "") || "project";
+                        link.download = `${projectSlug}-openapi.json`;
+                        document.body.appendChild(link);
+                        link.click();
+                        link.remove();
+                        URL.revokeObjectURL(url);
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "OpenAPI specification could not be generated.");
+                      }
+                    }}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:border-blue-600 hover:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <ExternalLink size={15} /> Export OpenAPI JSON
+                  </button>
+                </div>
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
                   <h2 className="font-semibold">Add API contract</h2>
                   <div className="mt-5 grid gap-4">
