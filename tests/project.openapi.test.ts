@@ -58,7 +58,7 @@ describe("buildOpenApiDocument", () => {
       contract({ id: "two", path: "/accounts/{accountId}", title: "Get user" }),
     ], "Accounts API");
 
-    expect(document.paths["/users/{userId}"].get?.operationId).toBe("get_get_user");
+    expect(document.paths["/users/{userId}"].get?.operationId).toBe("get_user");
     expect(document.paths["/accounts/{accountId}"].get?.operationId).toBe("get_user_2");
   });
 
