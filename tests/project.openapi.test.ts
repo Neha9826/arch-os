@@ -69,6 +69,18 @@ describe("buildOpenApiDocument", () => {
     ], "Accounts API")).toThrow("Duplicate API contract for GET /users/{userId}.");
   });
 
+  test("rejects paths with malformed parameter templates", () => {
+    expect(() => buildOpenApiDocument([
+      contract({ path: "/users/{userId" }),
+    ], "Accounts API")).toThrow('Invalid OpenAPI path parameter syntax in "/users/{userId".');
+  });
+
+  test("rejects query strings embedded in a path", () => {
+    expect(() => buildOpenApiDocument([
+      contract({ path: "/users?active=true" }),
+    ], "Accounts API")).toThrow('Invalid OpenAPI path "/users?active=true": query strings and fragments are not allowed.');
+  });
+
   test("uses a fallback title for blank project names", () => {
     expect(buildOpenApiDocument([], " ").info.title).toBe("Project API");
   });
