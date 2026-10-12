@@ -43,7 +43,16 @@ function toOperationId(value: string): string {
 }
 
 function getPathParameters(path: string): OpenApiParameter[] {
+  if (path.includes("?") || path.includes("#")) {
+    throw new Error(`Invalid OpenAPI path "${path}": query strings and fragments are not allowed.`);
+  }
+
   const names = Array.from(path.matchAll(/\{([^{}]+)\}/g), (match) => match[1]);
+  const pathWithoutParameters = path.replace(/\{[^{}]+\}/g, "");
+  if (/[{}]/.test(pathWithoutParameters) || names.some((name) => !/^[A-Za-z0-9_.-]+$/.test(name))) {
+    throw new Error(`Invalid OpenAPI path parameter syntax in "${path}".`);
+  }
+
   return [...new Set(names)].map((name) => ({
     name,
     in: "path",
