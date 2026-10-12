@@ -12,7 +12,7 @@ const PROJECT_REQUIREMENT_TITLE_MAX_LENGTH = 200;
 const PROJECT_REQUIREMENT_DESCRIPTION_MAX_LENGTH = 2000;
 
 function isValidDateOnlyString(value: string): boolean {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
@@ -138,7 +138,7 @@ export function isValidProjectMilestone(milestone: import("./types").ProjectMile
     milestone.title.trim().length <= 200 &&
     (milestone.description === undefined || (typeof milestone.description === "string" && milestone.description.length <= 2000)) &&
     isProjectMilestoneStatus(milestone.status) &&
-    (milestone.targetDate === undefined || (typeof milestone.targetDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(milestone.targetDate)))
+    (milestone.targetDate === undefined || (typeof milestone.targetDate === "string" && isValidDateOnlyString(milestone.targetDate)))
   );
 }
 
@@ -315,6 +315,6 @@ export function isValidProjectExecutionTask(
     isProjectExecutionTaskStatus(task.status) &&
     (task.section === undefined || isProjectSectionKey(task.section)) &&
     (task.sourceId === undefined || (typeof task.sourceId === "string" && task.sourceId.length <= 160)) &&
-    (task.dueDate === undefined || (typeof task.dueDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate)))
+    (task.dueDate === undefined || (typeof task.dueDate === "string" && isValidDateOnlyString(task.dueDate)))
   );
 }
