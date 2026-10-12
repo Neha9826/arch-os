@@ -59,7 +59,7 @@ describe("buildOpenApiDocument", () => {
     ], "Accounts API");
 
     expect(document.paths["/users/{userId}"].get?.operationId).toBe("get_get_user");
-    expect(document.paths["/accounts/{accountId}"].get?.operationId).toBe("get_get_user_2");
+    expect(document.paths["/accounts/{accountId}"].get?.operationId).toBe("get_user_2");
   });
 
   test("rejects duplicate contracts for the same method and path", () => {
