@@ -68,7 +68,10 @@ describe("Project domain validation", () => {
     };
 
     expect(isValidProjectMilestone({ ...base, targetDate: "2026-10-05" })).toBe(true);
+    expect(isValidProjectMilestone({ ...base, targetDate: "2024-02-29" })).toBe(true);
     expect(isValidProjectMilestone({ ...base, targetDate: "2026/10/05" })).toBe(false);
+    expect(isValidProjectMilestone({ ...base, targetDate: "2026-02-29" })).toBe(false);
+    expect(isValidProjectMilestone({ ...base, targetDate: "2026-13-01" })).toBe(false);
   });
 
   test("requires API contract paths to start with /", () => {
@@ -213,6 +216,9 @@ describe("Project domain validation", () => {
     expect(isValidProjectExecutionTask({ ...base, section: "unknown" as never })).toBe(false);
     expect(isValidProjectExecutionTask({ ...base, sourceId: "x".repeat(161) })).toBe(false);
     expect(isValidProjectExecutionTask({ ...base, dueDate: "2026/11/15" })).toBe(false);
+    expect(isValidProjectExecutionTask({ ...base, dueDate: "2026-02-30" })).toBe(false);
+    expect(isValidProjectExecutionTask({ ...base, dueDate: "2026-13-15" })).toBe(false);
+    expect(isValidProjectExecutionTask({ ...base, dueDate: "2024-02-29" })).toBe(true);
     expect(isValidProjectExecutionTask({ ...base, title: " " })).toBe(false);
     expect(isValidProjectExecutionTask({ ...base, description: "x".repeat(2001) })).toBe(false);
     expect(
